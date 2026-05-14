@@ -13,8 +13,7 @@ For an example bill of materials, read [`BOM.md`](/supplementary/BOM.md); for mo
     author={Jacopo Panerati and Sina Sajjadi and Sina Soleymanpour and Varunkumar Mehta and Iraj Mantegh},
     booktitle={2026 International Conference on Unmanned Aircraft Systems (ICUAS)},
     title={{aerial-autonomy-stack}---a faster-than-real-time, autopilot-agnostic, {ROS2} framework to simulate and deploy perception-based drones},
-    year={2026}
-}
+    year={2026}}
 ```
 
 <details>
