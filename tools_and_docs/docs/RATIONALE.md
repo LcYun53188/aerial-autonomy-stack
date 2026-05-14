@@ -14,10 +14,23 @@ This is the challenge—and good sport—of **vertical/full-stack integration** 
 - the **many frameworks** that go into drone autonomy (a physics engine to simulate drone dynamics, a rendering engine to generate realistic imagery, a GPU-accelerated machine learning runtime for perception, one or more inter-process and inter-thread communication middleware, the interface to the microcontroller and autopilot software performing state-estimation and low-level control, the SDKs of the deployed embedded systems, etc.)
 - emulated **inter-robot communication** (in aerial systems, this is heavily affected by the actual flight plans and available RF hardware)
 
+## Design Manifesto
+
+- **Simplicity** (["simple is better than complex"](https://peps.python.org/pep-0020/), ["worse is better"](https://www.dreamsongs.com/RiseOfWorseIsBetter.html), and ["no fat software"](https://people.inf.ethz.ch/wirth/Articles/LeanSoftware.pdf) are the 3 slogans of the AAS)
+- [おまかせ](https://dhh.dk/2012/rails-is-omakase.html) **end-to-end**ness (from camera frames, to autopilot uORB/MAVLink commands)
+- **Recentness** (break and fix, rather than carrying technical [debt](https://c2.com/doc/oopsla92.html))
+- **Deployment** focus
+    - Clear, Dockerized split between aircraft, ground, and simulation software
+    - ROS2 intra-companion board messaging
+    - XRCE-DDS (PX4), MAVROS (ArduPilot) autopilot-to-companion board ROS2 bridge
+    - GStreamer camera-to-companion board acquisition pipelines
+    - Zenoh inter-vehicle ROS2 bridge, with networking over LAN (HITL) or emulated by `docker network` (SITL)
+    - Dual network—in both SITL and HITL—to separate synthetic sensor data from inter-vehicle communication
+
 ## Presentations and Papers
 
-- ["On the System Design Reality Gap" (January 2026) Aerial Robotics Meeting [slides]](https://docs.google.com/presentation/d/1Sz0d7WPWNwgCM3Q49Nnq1mvkSwPyK_CCQ7viHxO_Ucs)
-- ["aerial-autonomy-stack—a Faster-than-real-time, Autopilot-agnostic, ROS2 Framework to Simulate and Deploy Perception-based Drones" (February 2026) arXiv [paper]](https://arxiv.org/abs/2602.07264)
+- ["On the System Design Reality Gap" (January 2026) Aerial Robotics Meeting](https://docs.google.com/presentation/d/1Sz0d7WPWNwgCM3Q49Nnq1mvkSwPyK_CCQ7viHxO_Ucs)
+- ["aerial-autonomy-stack—a Faster-than-real-time, Autopilot-agnostic, ROS2 Framework to Simulate and Deploy Perception-based Drones" (June 2026) International Conference on Unmanned Aircraft Systems (ICUAS)](https://arxiv.org/abs/2602.07264)
 
 ## Related Work
 
@@ -38,16 +51,3 @@ A summary of aerial robotics simulators can be found in [Table IV of this paper]
 - *UZH*'s [`flightmare`](https://github.com/uzh-rpg/flightmare), *ETH*'s [`RotorS`](https://github.com/ethz-asl/rotors_simulator), *NYU*'s [`RotorTM`](https://github.com/arplaboratory/RotorTM), *Microsoft*'s [`AirSim`](https://github.com/microsoft/AirSim), etc.
 
 For even more resources, check out [`aerial_robotic_landscape`](https://github.com/ROS-Aerial/aerial_robotic_landscape).
-
-## Design Manifesto
-
-- **Simplicity** (["simple is better than complex"](https://peps.python.org/pep-0020/), ["worse is better"](https://www.dreamsongs.com/RiseOfWorseIsBetter.html), and ["no fat software"](https://people.inf.ethz.ch/wirth/Articles/LeanSoftware.pdf) are the 3 slogans of the AAS)
-- [おまかせ](https://dhh.dk/2012/rails-is-omakase.html) **end-to-end**ness (from camera frames, to autopilot uORB/MAVLink commands)
-- **Recentness** (break and fix, rather than carrying technical [debt](https://c2.com/doc/oopsla92.html))
-- **Deployment** focus
-    - Clear, Dockerized split between aircraft, ground, and simulation software
-    - ROS2 intra-companion board messaging
-    - XRCE-DDS (PX4), MAVROS (ArduPilot) autopilot-to-companion board ROS2 bridge
-    - GStreamer camera-to-companion board acquisition pipelines
-    - Zenoh inter-vehicle ROS2 bridge, with networking over LAN (HITL) or emulated by `docker network` (SITL)
-    - Dual network—in both SITL and HITL—to separate synthetic sensor data from inter-vehicle communication
