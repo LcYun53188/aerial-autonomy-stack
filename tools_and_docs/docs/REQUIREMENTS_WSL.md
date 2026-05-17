@@ -146,13 +146,13 @@ docker run --rm --gpus all nvcr.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu22.04 
 > ```
 > and go back to the ["Installation" instructions](https://github.com/JacopoPan/aerial-autonomy-stack#1-installation)
 
-## Troubleshoot
+## (optional) NVIDIA NCG Catalog Log In
 
 To be able to pull the base Docker images frequently, you might have to log in to the NVIDIA Registry:
 
 - Go to https://ngc.nvidia.com and login/create an account.
-- Click on your account the top right, go to Setup -> Get API Key.
-- Click "Generate API Key" -> "+ Generate Personal Key" for the "NCG Catalog" service, confirm, and copy the key.
+- Click on your account the top right, go to Account Settings -> Generate API Key.
+- Click "+ Generate Personal Key", pick "NCG Catalog" among the Services Included, generate, and copy the key.
 
 ```sh
 docker login nvcr.io                # To be able to reliably pull NVIDIA base images

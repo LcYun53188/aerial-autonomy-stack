@@ -187,13 +187,13 @@ aerial-autonomy-stack
 <details>
 <summary>Dependency management <i>(click to expand)</i></summary>
 
-- [x] Host OS: [Ubuntu 24.04/22.04 (LTS, ESM 4/2034)](https://ubuntu.com/about/release-cycle)
-    - **TODO: test on Ubuntu 26.04**
+- [x] Host OS: [Ubuntu 22.04/24.04/26.04 (LTS, ESM 4/2036)](https://ubuntu.com/about/release-cycle)
 - [ ] Jetpack: [6.2.1 (rev. 1) [L4T 36.4.4, Ubuntu 22-based]](https://developer.nvidia.com/embedded/jetpack-archive)
     - **TODO: test on JP 6.2.2 [L4T 36.5.0, Ubuntu 22-based]**
 - [x] [`nvidia-driver-580`](https://developer.nvidia.com/datacenter-driver-archive)
-    - **NOTE: `nvidia-driver-590/595` does not support the [presets in Ubuntu 22's GStreamer 1.20](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.0/deprecation-notices/index.html) and it requires updating the `amd64` base images to Ubuntu 24 or compiling [GStreamer 1.24](https://discourse.gstreamer.org/t/nvcodec-nvenc-nvidia-deprecates-support-for-old-videocodec-sdk-h-264-hevc-encoder-presets-with-driver-r550-in-q124/182) from source**
+    - **NOTE: `nvidia-driver-590` does not support the [presets in Ubuntu 22's GStreamer 1.20](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.0/deprecation-notices/index.html) and it requires updating the `amd64` base images to Ubuntu 24 or compiling [GStreamer 1.24](https://discourse.gstreamer.org/t/nvcodec-nvenc-nvidia-deprecates-support-for-old-videocodec-sdk-h-264-hevc-encoder-presets-with-driver-r550-in-q124/182) from source**
     - **AAS sticks with `nvidia-driver-580` and Ubuntu 22 `amd64` base images for parity with the L4T 36.x, Ubuntu 22-based `arm64` base image**
+    - **TODO: test `nvidia-driver-595`**
 - [x] [Docker Engine v29](https://docs.docker.com/engine/release-notes/)
 - [x] [NVIDIA Container Toolkit 1.19](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/index.html)
 - [x] `amd64` base image: [`cuda:12.9.1-cudnn-runtime-ubuntu22.04`](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/cuda/tags)
@@ -208,6 +208,14 @@ aerial-autonomy-stack
 - [x] [YOLO26](https://github.com/ultralytics/ultralytics/releases)
 - [x] [ONNX Runtime 1.23.2](https://github.com/microsoft/onnxruntime/releases)
     - **NOTE: updating to 1.24 from wheel requires switching to Python >3.11/Ubuntu 24**
+
+```
+Transitive constraints summary:
+
+Jeton Orin only supports JetPack up to version 6 -> JetPack 6 is based on L4T 36 (Ubuntu 22)
+  -> Ubuntu 22's system Python is version 3.10 -> the last available ONNX Runtime wheel for Python 3.10 is version 1.23.2 -> ONNX Runtime 1.23.2 does not support CUDA 13
+  -> Ubuntu 22's GStreamer apt package is version 1.20 -> GStreamer 1.20's `nvh264enc preset` are no longer supported beyond `nvidia-driver-580`
+```
 
 External repositories:
 - [`PX4/PX4-Autopilot`](https://github.com/PX4/PX4-Autopilot) tag/branch: `v1.16.2`
@@ -252,7 +260,7 @@ done
 </div>
 
 > [!NOTE]
-> AAS is tested on Ubuntu 24.04/22.04 with `nvidia-driver-580` using an i7-11 with 16GB RAM and RTX 3060
+> AAS is developed on Ubuntu 24.04 with `nvidia-driver-580` using an i7-11 with 16GB RAM and RTX 3060
 >
 > Read [`REQUIREMENTS_UBUNTU.md`](/tools_and_docs/docs/REQUIREMENTS_UBUNTU.md) (or [`REQUIREMENTS_WSL.md`](/tools_and_docs/docs/REQUIREMENTS_WSL.md) for Windows 11) to install the requirements
 

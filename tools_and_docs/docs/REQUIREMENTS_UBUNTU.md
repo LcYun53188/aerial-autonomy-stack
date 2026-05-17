@@ -1,19 +1,20 @@
 # Pre-installation Steps for AAS on Ubuntu
 
-> These instructions are tested using Ubuntu 22.04.5 LTS and Ubuntu 24.04.3 LTS
+> These instructions are tested using Ubuntu 22.04.5 LTS, Ubuntu 24.04.4 LTS, Ubuntu 26.04 LTS
 
 > [!TIP]
 > Run [`check_requirements.sh`](/tools_and_docs/tests/check_requirements.sh) to verify whether you need to follow the steps below
 
 ## Install Ubuntu with NVIDIA Driver
 
-- Get/install an OS from a startup disk based on Ubuntu 22 or newer (e.g. `ubuntu-22.04.5-desktop-amd64.iso`)
+- Install Ubuntu 22 or newer (e.g. from a drive created with `usb-creator-gtk`)
   - Choose "Normal installation", "Download updates while installing Ubuntu", no "Install third-party software"
 - Update the OS
   - Run "Software Updater" and restart
-  - "Update All" in "Ubuntu Software" (including `killall snap-store && sudo snap refresh snap-store`)
-  - Update and restart for "Device Firmware" as necessary
-- In "Software & Updates", select "Using NVIDIA driver metapackage from `nvidia-driver-580` (proprietary)"
+  - "Update All" in "Ubuntu Software"/"App Center" <!-- On Ubuntu 22, run `killall snap-store && sudo snap refresh snap-store`  -->
+  - Update and restart for "Device Firmware", if necessary
+- On Ubuntu 22/24, in "Software & Updates", select "Using NVIDIA driver metapackage from `nvidia-driver-580` (proprietary)"
+- On Ubuntu 26, use `sudo ubuntu-drivers install nvidia-driver-580`
 - (optional) Go to "Settings" -> "Power", select  the "Performance" "Power Mode" and disable all "Power Saving Options"
 
 ```sh
@@ -55,7 +56,7 @@ sudo docker version                 # (optional) Check version
 # Remove the need to sudo the docker command
 sudo groupadd docker
 sudo usermod -aG docker $USER
-newgrp docker                       # Reboot
+newgrp docker                       # If needed, `sudo apt install util-linux-extra`, reboot
 
 docker run hello-world              # Test Docker is working without sudo
 ```
@@ -95,33 +96,13 @@ docker run --rm --gpus all nvcr.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu22.04 
 > ```
 > and go back to the ["Installation" instructions](https://github.com/JacopoPan/aerial-autonomy-stack#1-installation)
 
-## Optimize Memory Usage
-
-**Optionally**, increase the swap size and, if you have an SSD, decrease swappiness
-
-```sh
-# Increase Ubuntu's default 2GB swap memory to 8GB
-sudo swapon --show
-sudo swapoff /swapfile
-sudo fallocate -l 8G /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-sudo swapon --show
-
-# Decrease Ubuntu's default swappiness of 60 to 10 (to reduce SSD wear)
-cat /proc/sys/vm/swappiness
-echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
-cat /proc/sys/vm/swappiness
-```
-
-## Troubleshoot
+## (optional) NVIDIA NCG Log Catalog In
 
 To be able to pull the base Docker images frequently, you might have to log in to the NVIDIA Registry:
 
 - Go to https://ngc.nvidia.com and login/create an account.
-- Click on your account the top right, go to Setup -> Get API Key.
-- Click "Generate API Key" -> "+ Generate Personal Key" for the "NCG Catalog" service, confirm, and copy the key.
+- Click on your account the top right, go to Account Settings -> Generate API Key.
+- Click "+ Generate Personal Key", pick "NCG Catalog" among the Services Included, generate, and copy the key.
 
 ```sh
 docker login nvcr.io                # To be able to reliably pull NVIDIA base images

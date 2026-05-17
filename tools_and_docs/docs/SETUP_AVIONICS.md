@@ -10,7 +10,7 @@
 
 Holybro Jetson baseboards normally ship with JetPack 5
 
-To upgrade to JetPack 6, download NVIDIA SDK Manager on the Ubuntu 22 host computer from [here](https://developer.nvidia.com/sdk-manager#installation_get_started)
+To upgrade to JetPack 6, download NVIDIA SDK Manager on an Ubuntu 22 (see [compatibility matrix](https://developer.nvidia.com/sdk-manager#host_os_comp_matrix)) host computer from [here](https://developer.nvidia.com/sdk-manager#installation_get_started)
 
 ```sh
 cd ~/Downloads
