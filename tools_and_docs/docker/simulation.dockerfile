@@ -1,102 +1,21 @@
 ################################################################################
-# Stage 1 ######################################################################
+# Import ROS2 layer from aircraft.dockerfile, QGC layer from ground.dockerfile #
 ################################################################################
-FROM nvcr.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu22.04 AS ros2-image
-
-# Tell apt (and other Debian tools) not to prompt for user input during package installs
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Update the package list and install basic dependencies
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        wget gosu htop vim ruby tmux xclip net-tools iproute2 iputils-ping netcat-openbsd \
-        python3-pip python3-venv \
-        mesa-utils \
-    && gem install tmuxinator \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install ROS2 Humble
-# Based on https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        locales \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN locale-gen en_US en_US.UTF-8
-RUN update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
-ENV LANG=en_US.UTF-8
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        software-properties-common curl \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu \
-    $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        ros-humble-desktop ros-dev-tools \
-        ros-humble-bondcpp ros-humble-ament-cmake-clang-format \
-        ros-humble-vision-msgs \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
-RUN rosdep init
+FROM transitionary-ros2-qgc-image AS ros2-qgc-image
 
 ################################################################################
-# Stage 2 ######################################################################
+# Add Gazebo Sim ###############################################################
 ################################################################################
-FROM ros2-image AS ros2-qgc-zenoh-image
-
-# QGroundControl (as qgcuser)
-# Based on https://docs.qgroundcontrol.com/master/en/qgc-user-guide/getting_started/download_and_install.html
-WORKDIR /
-RUN useradd -m -s /bin/bash qgcuser
-RUN usermod -aG dialout qgcuser
-# RUN apt-get remove modemmanager -y
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl \
-        libfuse2 \
-        libxcb-xinerama0 libxkbcommon-x11-0 libxcb-cursor-dev \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN wget https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl-x86_64.AppImage && \
-    chmod +x /QGroundControl-x86_64.AppImage && \
-    /QGroundControl-x86_64.AppImage --appimage-extract && \
-    rm /QGroundControl-x86_64.AppImage
-# Run with $ gosu qgcuser /squashfs-root/AppRun
-
-# Install wmctrl and xrandr to resize Gazebo/QGC window
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        wmctrl x11-xserver-utils \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Zenoh
-RUN echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" | sudo tee -a /etc/apt/sources.list > /dev/null
-RUN apt-get update && \
-    apt-get install -y zenoh-bridge-ros2dds \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-
-################################################################################
-# Stage 3 ######################################################################
-################################################################################
-FROM ros2-qgc-zenoh-image AS ros2-qgc-zenoh-gz-image
+FROM ros2-qgc-image AS ros2-qgc-gz-image
 
 # Gazebo Harmonic
 # Based on https://gazebosim.org/docs/harmonic/install_ubuntu/
 RUN apt update \
     && apt install -y --no-install-recommends \
         lsb-release gnupg \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
-RUN apt update \
+    && curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \
+    && apt update \
     && apt install -y --no-install-recommends \
         gz-harmonic ros-humble-ros-gzharmonic \
         libgz-transport13-* libgz-msgs10-dev \
@@ -106,32 +25,36 @@ RUN apt update \
 # Run with $ gz sim
 
 ################################################################################
-# Stage 4 ######################################################################
+# Add PX4 ######################################################################
 ################################################################################
-FROM ros2-qgc-zenoh-gz-image AS ros2-qgc-zenoh-gz-px4-image
+FROM ros2-qgc-gz-image AS ros2-qgc-gz-px4-image
 
 # PX4 SITL (NOTE: install PX4 tools first to avoid conflicts with ArduPilot, build later to customize)
 # Based on https://docs.px4.io/main/en/dev_setup/dev_env_linux_ubuntu.html
 COPY /_github_clones/PX4-Autopilot /aas/github_apps/PX4-Autopilot
 WORKDIR /aas/github_apps/PX4-Autopilot
-RUN bash ./Tools/setup/ubuntu.sh --no-sim-tools
+RUN bash ./Tools/setup/ubuntu.sh --no-sim-tools \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 ################################################################################
-# Stage 5 ######################################################################
+# Add ArduPilot ################################################################
 ################################################################################
-FROM ros2-qgc-zenoh-gz-px4-image AS ros2-qgc-zenoh-gz-px4-ardupilot-image
+FROM ros2-qgc-gz-px4-image AS ros2-qgc-gz-px4-ardupilot-image
 
 # ArduPilot SITL (temporarily as arduuser, then re chown to root)
 # Based on https://ardupilot.org/dev/docs/building-setup-linux.html#building-setup-linux
 COPY /_github_clones/ardupilot /aas/github_apps/ardupilot
 WORKDIR /aas/github_apps/ardupilot
-RUN useradd -m -s /bin/bash arduuser && \
-    echo "arduuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/arduuser && chmod 0440 /etc/sudoers.d/arduuser && \
-    gosu arduuser git config --global --add safe.directory /aas/github_apps/ardupilot && \
-    chown -R arduuser:arduuser /aas/github_apps/ardupilot
-RUN USER=arduuser gosu arduuser bash ./Tools/environment_install/install-prereqs-ubuntu.sh -y
-RUN gosu arduuser bash -c "cd /aas/github_apps/ardupilot && ./waf configure --board sitl && ./waf build"
-RUN chown -R root:root /aas/github_apps/ardupilot
+RUN useradd -m -s /bin/bash arduuser \
+    && echo "arduuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/arduuser && chmod 0440 /etc/sudoers.d/arduuser \
+    && gosu arduuser git config --global --add safe.directory /aas/github_apps/ardupilot \
+    && chown -R arduuser:arduuser /aas/github_apps/ardupilot \
+    && USER=arduuser gosu arduuser bash ./Tools/environment_install/install-prereqs-ubuntu.sh -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+RUN gosu arduuser bash -c "cd /aas/github_apps/ardupilot && ./waf configure --board sitl && ./waf build" \
+    && chown -R root:root /aas/github_apps/ardupilot
 # Run with $ /aas/github_apps/ardupilot/build/sitl/bin/arducopter
 
 # ArduPilot Gazebo Plugin
@@ -152,11 +75,11 @@ RUN mkdir build && cd build && \
     make -j$(nproc)
 
 # Pre-build in the Docker image to speed up the first use of sim_vehicle.py
-RUN /aas/github_apps/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter
-RUN /aas/github_apps/ardupilot/Tools/autotest/sim_vehicle.py -v ArduPlane
+RUN /aas/github_apps/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter \
+    && /aas/github_apps/ardupilot/Tools/autotest/sim_vehicle.py -v ArduPlane
 
 ################################################################################
-# Temporary stage to filter airframes ##########################################
+# Ephemeral stage to grab AAS PX4 custom airframes #############################
 ################################################################################
 FROM ubuntu:22.04 AS airframe_filter_stage
 COPY simulation/simulation_resources/aircraft_models/ /temp_folder
@@ -164,9 +87,9 @@ RUN mkdir /airframes
 RUN find /temp_folder -type f -regex '.*/[0-9]+_.*' -exec cp {} /airframes/ \;
 
 ################################################################################
-# Stage 6 ######################################################################
+# Build PX4 SITL with AAS airframes using the airframe_filter_stage stage ######
 ################################################################################
-FROM ros2-qgc-zenoh-gz-px4-ardupilot-image AS ros2-qgc-zenoh-gz-px4custom-ardupilot-image
+FROM ros2-qgc-gz-px4-ardupilot-image AS ros2-qgc-gz-px4custom-ardupilot-image
 
 # Apply PX4 patch (DDS Agent on custom IP, ...) created with $ git diff > ../px4-v1.16.2.patch
 COPY simulation/simulation_resources/patches/px4-v1.16.2.patch /aas/github_apps/px4-v1.16.2.patch
@@ -190,9 +113,9 @@ RUN make px4_sitl
 # Run with $ /aas/github_apps/PX4-Autopilot/build/px4_sitl_default/bin/px4
 
 ################################################################################
-# Stage 7 ######################################################################
+# Add GStreamer, MAVLink, flight_review, wave simulation, ZeroMQ ###############
 ################################################################################
-FROM ros2-qgc-zenoh-gz-px4custom-ardupilot-image AS ros2-qgc-zenoh-gz-px4custom-ardupilot-gst-logs-waves-zmq-image
+FROM ros2-qgc-gz-px4custom-ardupilot-image AS ros2-qgc-gz-px4custom-ardupilot-gst-logs-waves-zmq-image
 
 # Add GStreamer packages to stream the cameras to the aircraft containers
 RUN apt update \
@@ -215,8 +138,8 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 COPY /_github_clones/flight_review /aas/github_apps/flight_review
 WORKDIR /aas/github_apps/flight_review/app
-RUN python3 -m venv /px4fr-env
-RUN /px4fr-env/bin/pip3 install --no-cache-dir --upgrade pip && \
+RUN python3 -m venv /px4fr-env \
+    && /px4fr-env/bin/pip3 install --no-cache-dir --upgrade pip && \
     /px4fr-env/bin/pip3 install --no-cache-dir --resume-retries 5 -r requirements.txt
 
 # Build the Gazebo wave plugin in github_ws/
@@ -245,22 +168,22 @@ RUN pip3 install --no-cache-dir --upgrade pip \
     && pip3 install --no-cache-dir --resume-retries 5 pyzmq
 
 ################################################################################
-# Stage 8 ######################################################################
+# Copy AAS resources and build AAS ROS2 workspace ##############################
 ################################################################################
-FROM ros2-qgc-zenoh-gz-px4custom-ardupilot-gst-logs-waves-zmq-image AS simulation-dev-image
+FROM ros2-qgc-gz-px4custom-ardupilot-gst-logs-waves-zmq-image AS simulation-dev-image
 
 # Build the ROS 2 workspace
 COPY simulation/simulation_ws/src /aas/simulation_ws/src
 WORKDIR /aas/simulation_ws
 RUN rosdep update
-RUN rosdep install --from-paths src/ --ignore-src --rosdistro humble -y
+RUN rosdep install --from-paths src/ --ignore-src --rosdistro humble -y && apt clean && rm -rf /var/lib/apt/lists/*
 # Explicitly use bash, not sh, to source and build the workspace
 RUN bash -c "source /opt/ros/humble/setup.bash && (source /aas/github_ws/install/setup.bash || true) && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
 
 # Copy resources and configuration files from this repository
 COPY simulation/simulation_resources/ /aas/simulation_resources
-RUN chmod +x /aas/simulation_resources/aircraft_models/_create_ardupilot_models.sh
-RUN chmod +x /aas/simulation_resources/simulation_worlds/_create_ardupilot_world.sh
+RUN chmod +x /aas/simulation_resources/aircraft_models/_create_ardupilot_models.sh \
+    && chmod +x /aas/simulation_resources/simulation_worlds/_create_ardupilot_world.sh
 
 # Copy QGC configuration (only for GND_CONTAINER=false)
 COPY ground/ground_resources/patches/QGroundControl.ini /home/qgcuser/.config/QGroundControl/QGroundControl.ini
@@ -276,8 +199,8 @@ WORKDIR /aas/simulation_resources/aircraft_models/
 RUN ruby _create_sdfs_using_sensor_config.rb
 
 # Source the workspaces
-RUN echo "source /aas/github_ws/install/setup.bash" >> /root/.bashrc
-RUN echo "source /aas/simulation_ws/install/setup.bash" >> /root/.bashrc
+RUN echo "source /aas/github_ws/install/setup.bash" >> /root/.bashrc \
+    && echo "source /aas/simulation_ws/install/setup.bash" >> /root/.bashrc
 # If needed (but already in .bashrc) $ source /opt/ros/humble/setup.bash && source /aas/github_ws/install/setup.bash && source /aas/simulation_ws/install/setup.bash
 
 # Final config

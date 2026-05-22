@@ -1,14 +1,18 @@
+################################################################################
+# Pick amd64 (for simulation) or arm64 (on Jetson) image from the NGC Catalog ##
+################################################################################
 FROM nvcr.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu22.04 AS base_amd64
 FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS base_arm64
+
 ################################################################################
-# Stage 1 ######################################################################
+# Add tools and ROS2 ###########################################################
 ################################################################################
 FROM base_${TARGETARCH} AS ros2-image
 
 # Tell apt (and other Debian tools) not to prompt for user input during package installs
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Update the package list and install basic dependencies
+# Install general use tools
 RUN apt update \
     && apt install -y --no-install-recommends \
         wget gosu htop vim ruby tmux xclip net-tools iproute2 iputils-ping netcat-openbsd \
@@ -20,34 +24,36 @@ RUN apt update \
 
 # Install ROS2 Humble
 # Based on https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        locales \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN locale-gen en_US en_US.UTF-8
-RUN update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 ENV LANG=en_US.UTF-8
 RUN apt update \
     && apt install -y --no-install-recommends \
+        locales \
+    && locale-gen en_US en_US.UTF-8 \
+    && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
+    && apt install -y --no-install-recommends \
         software-properties-common curl \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu \
-    $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
-RUN apt update \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu \
+        $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
+    && apt update \
     && apt install -y --no-install-recommends \
         ros-humble-desktop ros-dev-tools \
         ros-humble-bondcpp ros-humble-ament-cmake-clang-format \
         ros-humble-vision-msgs \
     && apt clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc \
+    && rosdep init
+
+# Install Zenoh ROS2 bridge
+RUN echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" | sudo tee -a /etc/apt/sources.list > /dev/null \
+    && apt-get update && \
+    apt-get install -y zenoh-bridge-ros2dds \
+    && apt clean \
     && rm -rf /var/lib/apt/lists/*
-RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
-RUN rosdep init
 
 ################################################################################
-# Stage 2 ######################################################################
+# Add PX4 messages #############################################################
 ################################################################################
 FROM ros2-image AS ros2-px4msgs-image
 
@@ -55,12 +61,12 @@ FROM ros2-image AS ros2-px4msgs-image
 COPY /_github_clones/px4_msgs /aas/github_ws/src/px4_msgs
 WORKDIR /aas/github_ws
 RUN rosdep update
-RUN rosdep install --from-paths src --ignore-src --rosdistro humble -y
+RUN rosdep install --from-paths src --ignore-src --rosdistro humble -y && apt clean && rm -rf /var/lib/apt/lists/*
 # Explicitly use bash, not sh, to source and build the workspace
 RUN bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install"
 
 ################################################################################
-# Stage 3 ######################################################################
+# Add uXRCE-DDS agent ##########################################################
 ################################################################################
 FROM ros2-px4msgs-image AS ros2-px4msgs-dds-image
 
@@ -76,7 +82,7 @@ RUN mkdir build && cd build && \
 # Run with $ MicroXRCEAgent udp4 -p 8888
 
 ################################################################################
-# Stage 4 ######################################################################
+# Add MAVROS ###################################################################
 ################################################################################
 FROM ros2-px4msgs-dds-image AS ros2-px4msgs-dds-mavros-image
 
@@ -84,12 +90,12 @@ FROM ros2-px4msgs-dds-image AS ros2-px4msgs-dds-mavros-image
 RUN apt-get update && \
     apt-get install -y ros-humble-mavros ros-humble-mavros-extras ros-humble-mavros-msgs \
     && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN /opt/ros/humble/lib/mavros/install_geographiclib_datasets.sh
+    && rm -rf /var/lib/apt/lists/* \
+    && /opt/ros/humble/lib/mavros/install_geographiclib_datasets.sh
 # Run with $ ros2 launch mavros apm.launch fcu_url:=[URI]
 
 ################################################################################
-# Stage 5 ######################################################################
+# Add GStreamer, OpenCV, and Ultralytics YOLO ##################################
 ################################################################################
 FROM ros2-px4msgs-dds-mavros-image AS ros2-px4msgs-dds-mavros-yolo-image
 
@@ -111,8 +117,8 @@ RUN apt update \
 
 # Install YOLO and ONNX in virtual environment /yolo-env/
 # See https://github.com/ultralytics/ultralytics/blob/main/README.md and https://onnxruntime.ai/getting-started
-RUN python3 -m venv /yolo-env
-RUN /yolo-env/bin/pip3 install --no-cache-dir --upgrade pip && \
+RUN python3 -m venv /yolo-env \
+    && /yolo-env/bin/pip3 install --no-cache-dir --upgrade pip && \
     /yolo-env/bin/pip3 install --no-cache-dir --resume-retries 5 ultralytics onnx
 # Check YOLO with $ /yolo-env/bin/python3 -c "import ultralytics; print(ultralytics.__version__)"
 # NOTE: the venv avoids shadowing the system Python's OpenCV (with GStreamer support) with a newer one without GStreamer support
@@ -120,7 +126,8 @@ RUN /yolo-env/bin/pip3 install --no-cache-dir --upgrade pip && \
 # Versus $ /yolo-env/bin/python3 -c "import cv2; print(cv2.getBuildInformation())"
 
 ################################################################################
-# Alternate stage for ONNX Runtime GPU: use CUDA in sim, TensorRT on Orin ######
+# amd64 stage for ONNX Runtime GPU: from wheel for CUDA support in simulation ##
+# Mutually exclusive with the next stage #######################################
 ################################################################################
 FROM ros2-px4msgs-dds-mavros-yolo-image AS image-with-hardware-specific-ort-deepstream-and-drivers_amd64
 # Add ONNX Runtime with GPU (CUDA) support for system Python
@@ -128,6 +135,10 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir --resume-retries 5 onnxruntime-gpu
 # Check with $ python3 -c "import onnxruntime as ort; print(ort.__version__); print(ort.get_available_providers())"
 
+################################################################################
+# arm64 stage for ONNX Runtime GPU: from source for TensorRT support on Jetson #
+# Mutually exclusive with the previous stage ###################################
+################################################################################
 FROM ros2-px4msgs-dds-mavros-yolo-image AS image-with-hardware-specific-ort-deepstream-and-drivers_arm64
 # Build ONNX Runtime from source with Jetson (TensorRT) support for system Python
 # Based on https://onnxruntime.ai/docs/build/eps.html#nvidia-jetson-tx1tx2nanoxavierorin
@@ -159,7 +170,7 @@ RUN apt update && \
 ENV PYTHONPATH=/aas/github_apps/onnxruntime/build/Linux/Release
 # Check with $ python3 -c "import onnxruntime as ort; print(ort.__version__); print(ort.get_available_providers())"
 
-# Install DeepStream 7.1 on Orin to use NVIDIA accelerated GStreamer preprocessing (e.g. nvdewarper)
+# Also install DeepStream 7.1 on Orin to use NVIDIA accelerated GStreamer preprocessing (e.g. nvdewarper)
 # Based on https://docs.nvidia.com/metropolis/deepstream/7.1/text/DS_Installation.html
 WORKDIR /
 RUN apt update \
@@ -169,17 +180,21 @@ RUN apt update \
         gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav \
         libgstrtspserver-1.0-0 libjansson4 libyaml-cpp-dev \
     && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir --resume-retries 5 meson ninja
-RUN wget https://download.gnome.org/sources/glib/2.76/glib-2.76.6.tar.xz \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir --resume-retries 5 meson ninja \
+    && wget https://download.gnome.org/sources/glib/2.76/glib-2.76.6.tar.xz \
     && tar -xf glib-2.76.6.tar.xz \
     && cd glib-2.76.6 \
     && meson build --prefix=/usr \
     && ninja -C build \
-    && ninja -C build install
-RUN curl -LO 'https://api.ngc.nvidia.com/v2/resources/nvidia/deepstream/versions/7.1/files/deepstream-7.1_7.1.0-1_arm64.deb'
-RUN apt update && apt-get install -y ./deepstream-7.1_7.1.0-1_arm64.deb
+    && ninja -C build install \
+    && cd .. \
+    && curl -LO 'https://api.ngc.nvidia.com/v2/resources/nvidia/deepstream/versions/7.1/files/deepstream-7.1_7.1.0-1_arm64.deb' \
+    && apt-get install -y ./deepstream-7.1_7.1.0-1_arm64.deb \
+    && rm -rf deepstream-7.1_7.1.0-1_arm64.deb glib-2.76.6.tar.xz glib-2.76.6 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Also install the Livox ROS2 driver only on Orin for deployment
 COPY /_github_clones/Livox-SDK2 /aas/github_apps/Livox-SDK2
@@ -199,7 +214,7 @@ RUN cp -f src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.x
 RUN bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install --packages-select livox_ros_driver2 --cmake-args -DROS_EDITION=ROS2 -DDISTRO_ROS=humble -DCMAKE_BUILD_TYPE=Release"
 
 ################################################################################
-# Stage 6 ######################################################################
+# Add KISS-ICP #################################################################
 ################################################################################
 FROM image-with-hardware-specific-ort-deepstream-and-drivers_${TARGETARCH} AS ros2-px4msgs-dds-mavros-yolo-kissicp-zenoh-image
 
@@ -210,15 +225,8 @@ WORKDIR /aas/github_ws
 # Explicitly use bash, not sh, to source and build the workspace
 RUN bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install --packages-skip livox_ros_driver2 --cmake-args -DCMAKE_BUILD_TYPE=Release"
 
-# Install Zenoh
-RUN echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" | sudo tee -a /etc/apt/sources.list > /dev/null
-RUN apt-get update && \
-    apt-get install -y zenoh-bridge-ros2dds \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-
 ################################################################################
-# Stage 7 ######################################################################
+# Add analysis tools and YOLO models ###########################################
 ################################################################################
 FROM ros2-px4msgs-dds-mavros-yolo-kissicp-zenoh-image AS ros2-px4msgs-dds-mavros-yolo-kissicp-zenoh-analysis-models-image
 
@@ -244,7 +252,7 @@ RUN /yolo-env/bin/python3 -c "from ultralytics import YOLO; YOLO('yolo26n.pt').e
     rm yolo26n.pt
 
 ################################################################################
-# Stage 8 ######################################################################
+# Copy AAS resources and build AAS ROS2 workspace ##############################
 ################################################################################
 FROM ros2-px4msgs-dds-mavros-yolo-kissicp-zenoh-analysis-models-image AS aircraft-dev-image
 
@@ -253,7 +261,7 @@ COPY ground/ground_ws/src/ground_system_msgs /aas/aircraft_ws/src/ground_system_
 COPY aircraft/aircraft_ws/src /aas/aircraft_ws/src
 WORKDIR /aas/aircraft_ws
 RUN rosdep update
-RUN rosdep install --from-paths src/ --ignore-src --rosdistro humble -y --skip-keys "px4_msgs"
+RUN rosdep install --from-paths src/ --ignore-src --rosdistro humble -y --skip-keys "px4_msgs" && apt clean && rm -rf /var/lib/apt/lists/*
 # Explicitly use bash, not sh, to source and build the workspace
 RUN bash -c "source /opt/ros/humble/setup.bash && source /aas/github_ws/install/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
 
@@ -261,15 +269,15 @@ RUN bash -c "source /opt/ros/humble/setup.bash && source /aas/github_ws/install/
 COPY aircraft/aircraft_resources/ /aas/aircraft_resources
 COPY aircraft/aircraft_resources/patches/kiss_icp.rviz /aas/github_ws/src/kiss-icp/ros/rviz/kiss_icp.rviz
 COPY aircraft/aircraft_resources/patches/apm_pluginlists.yaml /opt/ros/humble/share/mavros/launch/apm_pluginlists.yaml
-RUN ln -s /aas/aircraft_resources/patches/cancellable_action.py /usr/local/bin/cancellable_action
-RUN chmod +x /aas/aircraft_resources/patches/cancellable_action.py
+RUN ln -s /aas/aircraft_resources/patches/cancellable_action.py /usr/local/bin/cancellable_action \
+    && chmod +x /aas/aircraft_resources/patches/cancellable_action.py
 
 # Copy sensor configuration
 COPY simulation/simulation_resources/aircraft_models/sensor_config.yaml /aas/aircraft_resources/sensor_config.yaml
 
 # Source the workspaces
-RUN echo "source /aas/github_ws/install/setup.bash" >> /root/.bashrc
-RUN echo "source /aas/aircraft_ws/install/setup.bash" >> /root/.bashrc
+RUN echo "source /aas/github_ws/install/setup.bash" >> /root/.bashrc \
+    && echo "source /aas/aircraft_ws/install/setup.bash" >> /root/.bashrc
 # If needed (but already in .bashrc) $ source /opt/ros/humble/setup.bash && source /aas/github_ws/install/setup.bash && source /aas/aircraft_ws/install/setup.bash
 
 # Final config

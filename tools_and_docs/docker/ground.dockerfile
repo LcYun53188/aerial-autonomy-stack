@@ -1,59 +1,18 @@
 ################################################################################
-# Stage 1 ######################################################################
+# Import ROS2 layer from aircraft.dockerfile ###################################
 ################################################################################
-FROM nvcr.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu22.04 AS ros2-image
-
-# Tell apt (and other Debian tools) not to prompt for user input during package installs
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Update the package list and install basic dependencies
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        wget gosu htop vim ruby tmux xclip net-tools iproute2 iputils-ping netcat-openbsd \
-        python3-pip python3-venv \
-        mesa-utils \
-    && gem install tmuxinator \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install ROS2 Humble
-# Based on https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        locales \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN locale-gen en_US en_US.UTF-8
-RUN update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
-ENV LANG=en_US.UTF-8
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        software-properties-common curl \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu \
-    $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        ros-humble-desktop ros-dev-tools \
-        ros-humble-bondcpp ros-humble-ament-cmake-clang-format \
-        ros-humble-vision-msgs \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
-RUN rosdep init
+FROM transitionary-ros2-image AS ros2-image
 
 ################################################################################
-# Stage 2 ######################################################################
+# Add QGroundControl ###########################################################
 ################################################################################
-FROM ros2-image AS ros2-qgc-zenoh-image
+FROM ros2-image AS ros2-qgc-image
 
 # QGroundControl (as qgcuser)
 # Based on https://docs.qgroundcontrol.com/master/en/qgc-user-guide/getting_started/download_and_install.html
 WORKDIR /
-RUN useradd -m -s /bin/bash qgcuser
-RUN usermod -aG dialout qgcuser
+RUN useradd -m -s /bin/bash qgcuser \
+    && usermod -aG dialout qgcuser
 # RUN apt-get remove modemmanager -y
 RUN apt update \
     && apt install -y --no-install-recommends \
@@ -61,8 +20,8 @@ RUN apt update \
         libfuse2 \
         libxcb-xinerama0 libxkbcommon-x11-0 libxcb-cursor-dev \
     && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-RUN wget https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl-x86_64.AppImage && \
+    && rm -rf /var/lib/apt/lists/* \
+    && wget https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl-x86_64.AppImage && \
     chmod +x /QGroundControl-x86_64.AppImage && \
     /QGroundControl-x86_64.AppImage --appimage-extract && \
     rm /QGroundControl-x86_64.AppImage
@@ -75,17 +34,10 @@ RUN apt update \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Zenoh
-RUN echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" | sudo tee -a /etc/apt/sources.list > /dev/null
-RUN apt-get update && \
-    apt-get install -y zenoh-bridge-ros2dds \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
-
 ################################################################################
-# Stage 3 ######################################################################
+# Add GStreamer and MAVLink ####################################################
 ################################################################################
-FROM ros2-qgc-zenoh-image AS ros2-qgc-zenoh-gst-mavlink-image
+FROM ros2-qgc-image AS ros2-qgc-gst-mavlink-image
 
 # Add GStreamer packages to stream the cameras to the aircraft containers
 RUN apt update \
@@ -117,15 +69,15 @@ RUN meson setup build . --buildtype=release \
 COPY /_github_clones/c_library_v2 /usr/local/include/mavlink/
 
 ################################################################################
-# Stage 4 ######################################################################
+# Copy AAS resources and build AAS ROS2 workspace ##############################
 ################################################################################
-FROM ros2-qgc-zenoh-gst-mavlink-image AS ground-dev-image
+FROM ros2-qgc-gst-mavlink-image AS ground-dev-image
 
 # Build the ROS 2 workspace
 COPY ground/ground_ws/src /aas/ground_ws/src
 WORKDIR /aas/ground_ws
 RUN rosdep update
-RUN rosdep install --from-paths src/ --ignore-src --rosdistro humble -y
+RUN rosdep install --from-paths src/ --ignore-src --rosdistro humble -y && apt clean && rm -rf /var/lib/apt/lists/*
 # Explicitly use bash, not sh, to source and build the workspace
 RUN bash -c "source /opt/ros/humble/setup.bash && (source /aas/github_ws/install/setup.bash || true) && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
 
