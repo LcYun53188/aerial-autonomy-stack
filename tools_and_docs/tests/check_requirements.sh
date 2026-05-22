@@ -37,7 +37,7 @@ else
     echo "    Instructions: $HELP_URL"
 fi
 
-if docker run --rm hello-world &> /dev/null; then
+if docker info &> /dev/null; then
     DOCKER_VER=$(docker --version | awk '{print $3}' | tr -d ',')
     DOCKER_MAJOR=${DOCKER_VER%%.*}
 
