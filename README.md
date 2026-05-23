@@ -57,7 +57,7 @@ done
 ```
 </details>
 
-## 2. Simulation
+## 2. Multi-drone Simulation
 
 ![workspace](https://github.com/user-attachments/assets/ad909fcc-69de-44ac-84b3-c5bc7a1c896f)
 
@@ -180,9 +180,11 @@ done
 > To end the simulation, in each terminal detach Tmux with `Ctrl + b`, then `d`; kill all lingering processes with `tmux kill-server && pkill -f gz`
 > </details>
 
-## 3. Jetson Deployment
+## 3. Deployment on Jetson
 
-> AAS is tested on a [Holybro Jetson Baseboard](https://holybro.com/products/pixhawk-jetson-baseboard) with Pixhawk 6X and NVIDIA Orin NX 16GB on an X650
+> AAS is tested on a [Holybro Jetson Baseboard](https://holybro.com/products/pixhawk-jetson-baseboard) with Pixhawk 6X and NVIDIA Orin NX 16GB
+>
+> The default quad is a [Holybro X650](https://holybro.com/collections/multicopter-kit/products/x650-kits?variant=43994378240189) with the [IMX219](https://docs.arducam.com/Nvidia-Jetson-Camera/Native-Camera/imx219/) camera and the [Livox Mid-360](https://www.livoxtech.com/mid-360/specs) LiDAR
 >
 > Read [`SETUP_AVIONICS.md`](/tools_and_docs/docs/SETUP_AVIONICS.md) and [`BOM.md`](/tools_and_docs/docs/BOM.md) to setup the requirements on the Jetson and configure the Pixhawk
 
@@ -264,7 +266,7 @@ HITL=true GROUND=true NUM_QUADS=2 AIR_SUBNET=10.223 HEADLESS=false ./deploy_run.
 Once done, detach Tmux (and remove the containers) with `Ctrl + b`, then `d`
 </details>
 
-## 4. Gymnasium Environment
+## 4. Gymnasium RL Environment
 
 <details>
 <summary>Using a Python <kbd>venv</kbd> or a <a href="https://docs.conda.io/projects/conda/en/stable/user-guide/install/linux.html"><kbd>conda</kbd></a> environment is optional but recommended <i>(click to expand)</i></summary>
@@ -296,7 +298,7 @@ python3 gym_run.py --mode speedup                     # Speed-up test @50Hz
 python3 gym_run.py --mode vectorenv-speedup           # Vectorized speed-up test @50Hz
 ```
 
-## Citation
+## Appendix A: Citation
 
 ```bibtex
 @INPROCEEDINGS{panerati2026aas,
@@ -306,7 +308,7 @@ python3 gym_run.py --mode vectorenv-speedup           # Vectorized speed-up test
     year={2026}}
 ```
 
-## Appendix: Architecture
+## Appendix B: Architecture
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontFamily': 'monospace'}}}%%
@@ -480,7 +482,8 @@ Transitive constraints (as of May 2026):
         - ONNX Runtime GPU 1.23.2 only supports CUDA 12 ([CUDA 13 added in ORT 1.24.1](https://github.com/microsoft/onnxruntime/releases/tag/v1.24.1))
           - The latest CUDA 12 on the [NVIDIA NGC Catalog](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/cuda/tags) is 12.9.1 (e.g., `cuda:12.9.1-cudnn-runtime-ubuntu22.04`)
     - Ubuntu 22's GStreamer `apt` package is version 1.20
-      - [GStreamer 1.20's `nvh264enc preset`s are no longer supported](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.0/deprecation-notices/index.html) beyond `nvidia-driver-580`; `nvidia-driver-595` requires [GStreamer 1.24](https://discourse.gstreamer.org/t/nvcodec-nvenc-nvidia-deprecates-support-for-old-videocodec-sdk-h-264-hevc-encoder-presets-with-driver-r550-in-q124/182), which is the default on Ubuntu 24
+      - [GStreamer 1.20's `nvh264enc preset`s are no longer supported](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.0/deprecation-notices/index.html) beyond `nvidia-driver-580`; `nvidia-driver-595` requires [GStreamer 1.24](https://discourse.gstreamer.org/t/nvcodec-nvenc-nvidia-deprecates-support-for-old-videocodec-sdk-h-264-hevc-encoder-presets-with-driver-r550-in-q124/182), which is the default on Ubuntu 24 ([PR #57](https://github.com/JacopoPan/aerial-autonomy-stack/pull/57)
+)
 
 External repositories:
 - [`PX4/PX4-Autopilot`](https://github.com/PX4/PX4-Autopilot) tag/branch: `v1.16.2`
