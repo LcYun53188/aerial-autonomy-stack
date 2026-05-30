@@ -542,7 +542,7 @@ docker system prune                   # Remove stopped containers, unused networ
 docker images                         # List images
 docker image prune                    # Remove untagged images
 docker rmi <image_name_or_id>         # Remove a specific image
-docker builder prune                  # Clear all dangling cache
+docker builder prune --filter "until=24h # Clear all dangling cache older than 24hrs
 ```
 
 ## Tmux Shortcuts
