@@ -553,6 +553,7 @@ tmux attach-session -t [session_name] # Reattach a session
 tmux kill-session -t [session_name]   # Kill a session
 tmux kill-server                      # Kill all sessions
 
+Ctrl + b, then c                      # Add new Tmux bash window
 Ctrl + b, then n, p                   # Move between Tmux windows
 Ctrl + b, then [arrow keys]           # Move between Tmux panes in a window (or use the mouse)
 Ctrl + [, then [arrow keys]           # Enter copy mode (to scroll back in a pane, or simply select-and-drag with the mouse to copy)
