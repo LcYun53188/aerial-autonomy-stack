@@ -8,7 +8,8 @@ PX4Offboard::PX4Offboard() : Node("px4_offboard"),
     x_(NAN), y_(NAN), z_(NAN), heading_(NAN), vx_(NAN), vy_(NAN), vz_(NAN), ref_lat_(NAN), ref_lon_(NAN), ref_alt_(NAN),
     pose_frame_(-1), velocity_frame_(-1), true_airspeed_m_s_(NAN),
     ground_tracks_(nullptr), yolo_detections_(nullptr),
-    traj_ref_east(NAN), traj_ref_north(NAN), traj_ref_up(NAN)
+    traj_ref_east_(NAN), traj_ref_north_(NAN), traj_ref_up_(NAN),
+    target_vn_(NAN), target_ve_(NAN), target_vd_(NAN)
 {
     RCLCPP_INFO(this->get_logger(), "PX4 offboard referencing!");
     RCLCPP_INFO(this->get_logger(), "namespace: %s", this->get_namespace());
@@ -145,49 +146,49 @@ void PX4Offboard::ground_tracks_callback(const ground_system_msgs::msg::SwarmObs
 {
     std::unique_lock<std::shared_mutex> lock(node_data_mutex_); // Use unique_lock for data writes
     ground_tracks_ = msg; // Save the smart pointer to the latest message
+    last_track_time_ = this->get_clock()->now();
 
-    double label48_lat = 0.0;
-    double label48_lon = 0.0;
-    double label48_alt = 0.0;
-    double label48_vn = 0.0;
-    double label48_ve = 0.0;
-    double label48_vd = 0.0;
-    bool label48_found = false;
-    for (const auto& track : ground_tracks_->tracks) {
-        if (track.label == 48) {
-            label48_lat = track.latitude_deg;
-            label48_lon = track.longitude_deg;
-            label48_alt = track.altitude_m;
-            label48_vn = track.velocity_n_m_s;
-            label48_ve = track.velocity_e_m_s;
-            label48_vd = track.velocity_d_m_s;
-            label48_found = true;
-            break;
-        }
-    }
-    if (!label48_found) {
-        RCLCPP_WARN_ONCE(get_logger(), "Label 48 not found in tracks.");
-        return;
-    }
+    // Verify LLA position of own reference point (used in PX4 local position)
     double reference_lat = ref_lat_;
     double reference_lon = ref_lon_;
     double reference_alt = ref_alt_;
-    if (std::isnan(reference_lat) || std::isnan(reference_lon)) {
+    if (std::isnan(reference_lat) || std::isnan(reference_lon) || std::isnan(reference_alt)) {
         RCLCPP_WARN_ONCE(get_logger(), "Waiting for reference position");
         return;
     }
-    // Predict position
-    const double prediction_time_sec = 0.0; // TODO: enable prediction
-    double target_ground_speed = std::sqrt(label48_vn * label48_vn + label48_ve * label48_ve);
-    double target_course_rad = std::atan2(label48_ve, label48_vn); // Azimuth from North
-    double target_course_deg = target_course_rad * 180.0 / M_PI;
-    double distance_traveled = target_ground_speed * prediction_time_sec;
-    double future_lat, future_lon;
-    geod.Direct(label48_lat, label48_lon, target_course_deg, distance_traveled, future_lat, future_lon);
-    double future_alt = label48_alt - (label48_vd * prediction_time_sec) + 2.0; // HARDCODED: track from above the target to avoid collisions
-    // Compute NED position of label48
+
+    // Find label 48
+    constexpr int TARGET_LABEL = 48; // 'o muorto che pparla
+    auto target_it = std::find_if(ground_tracks_->tracks.begin(), ground_tracks_->tracks.end(),
+                                  [](const auto& track) { return track.label == TARGET_LABEL; });
+    if (target_it == ground_tracks_->tracks.end()) {
+        RCLCPP_WARN_ONCE(get_logger(), "Label %d not found in tracks.", TARGET_LABEL);
+        return;
+    }
+    const auto& target_track = *target_it; // Bind a reference without copying
+
+    // Save label 48 velocities
+    target_vn_ = target_track.velocity_n_m_s;
+    target_ve_ = target_track.velocity_e_m_s;
+    target_vd_ = target_track.velocity_d_m_s;
+
+    // Predict LLA position of label 48
+    constexpr double PREDICTION_TIME_SEC = 0.0; // TODO: enable prediction
+    constexpr double ALT_SAFETY_MARGIN = 0.0; // TODO: add vertical separation to avoid collisions
+
+    double target_ground_speed = std::hypot(target_track.velocity_n_m_s, target_track.velocity_e_m_s);
+    double target_course_rad = std::atan2(target_track.velocity_e_m_s, target_track.velocity_n_m_s); // Azimuth from North
+    double target_course_deg = target_course_rad * (180.0 / M_PI);
+    double distance_traveled = target_ground_speed * PREDICTION_TIME_SEC;
+
+    double future_lat = 0.0, future_lon = 0.0;
+    geod.Direct(target_track.latitude_deg, target_track.longitude_deg, target_course_deg, distance_traveled,
+                future_lat, future_lon);
+    double future_alt = target_track.altitude_m - (target_track.velocity_d_m_s * PREDICTION_TIME_SEC) + ALT_SAFETY_MARGIN;
+
+    // Compute GeographicLib ENU position of label48 w.r.t. PX4 vehicle (using NED)
     const GeographicLib::LocalCartesian proj(reference_lat, reference_lon, reference_alt);
-    proj.Forward(future_lat, future_lon, future_alt, traj_ref_east, traj_ref_north, traj_ref_up);
+    proj.Forward(future_lat, future_lon, future_alt, traj_ref_east_, traj_ref_north_, traj_ref_up_);
 }
 
 void PX4Offboard::yolo_detections_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
@@ -281,7 +282,7 @@ void PX4Offboard::offboard_loop_callback()
     if (offboard_flag_ == 0) {
         return; // Do not publish anything else if not in an OFFBOARD state
     // TODO: implement custom offboard control logic here
-    // https://docs.px4.io/v1.15/en/flight_modes/offboard.html
+    // https://docs.px4.io/v1.17/en/flight_modes/offboard.html
     } else if (offboard_flag_ == 1) { // Quad attitude reference
         offboard_mode.attitude = true;
         VehicleAttitudeSetpoint attitude_ref; // https://github.com/PX4/px4_msgs/blob/release/1.17/msg/VehicleAttitudeSetpoint.msg
@@ -323,19 +324,58 @@ void PX4Offboard::offboard_loop_callback()
         rates_ref_pub_->publish(rates_ref);
     } else if (offboard_flag_ == 5) { // Quad trajectory (position) reference
         TrajectorySetpoint trajectory_ref; // https://github.com/PX4/px4_msgs/blob/release/1.17/msg/TrajectorySetpoint.msg
+        trajectory_ref.acceleration = {NAN, NAN, NAN}; // Unused
+        trajectory_ref.jerk = {NAN, NAN, NAN}; // Unused
         trajectory_ref.timestamp = current_time_us;
         offboard_mode.position = true;
-        trajectory_ref.position = {0.0, 0.0, -50.0};
+        trajectory_ref.position = {0.0, 0.0, -50.0}; // Home point
         trajectory_ref.yaw = -3.14; // [-PI:PI]
-        if (!std::isnan(traj_ref_east) && !std::isnan(traj_ref_north) && !std::isnan(traj_ref_up)) {
-            trajectory_ref.position = {traj_ref_north, traj_ref_east, -traj_ref_up};
-            trajectory_ref.yaw = std::atan2((traj_ref_east - y_), (traj_ref_north - x_)); // [-PI:PI]
+        ///////////////////////////////////////////////////////////////////////
+        // Predictive rendez-vous /////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////
+        if (!std::isnan(traj_ref_east_) && !std::isnan(traj_ref_north_) && !std::isnan(traj_ref_up_)) {
+            double dt = std::clamp((this->get_clock()->now() - last_track_time_).seconds(), 0.0, 2.0);
+            double current_north = traj_ref_north_ + (target_vn_ * dt);
+            double current_east  = traj_ref_east_  + (target_ve_ * dt);
+            double current_down  = -traj_ref_up_   + (target_vd_ * dt);
+            trajectory_ref.position = {current_north, current_east, current_down};
+            double d_north = current_north - x_;
+            double d_east  = current_east - y_;
+            trajectory_ref.yaw = std::atan2(d_east, d_north); // [-PI:PI]
+            if (!std::isnan(target_vn_) && !std::isnan(target_ve_) && !std::isnan(target_vd_)) {
+                offboard_mode.velocity = true; // Enable velocity feedforward
+                trajectory_ref.velocity = {target_vn_, target_ve_, target_vd_};
+                double dist_sq = (d_north * d_north) + (d_east * d_east);
+                if (dist_sq > 1.0) {
+                    double vrel_n = target_vn_ - vx_;
+                    double vrel_e = target_ve_ - vy_;
+                    trajectory_ref.yawspeed = (d_north * vrel_e - d_east * vrel_n) / dist_sq;
+                } else {
+                    trajectory_ref.yawspeed = 0.0;
+                }
+            } else {
+                trajectory_ref.velocity = {NAN, NAN, NAN};
+                trajectory_ref.yawspeed = NAN;
+            }
+        } else { // Missing track, stay still
+            offboard_mode.position = false;
+            trajectory_ref.position = {NAN, NAN, NAN}; ;
+            trajectory_ref.yaw = NAN;
+            offboard_mode.velocity = true;
+            trajectory_ref.velocity = {0.0, 0.0, 0.0};
+            trajectory_ref.yawspeed = 0.0;
         }
-        // offboard_mode.acceleration = true;
+        ///////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////
+        // offboard_mode.acceleration = true; // Enable acceleration feedforward
         // trajectory_ref.acceleration = {0.0, 0.0, -5.0};
         trajectory_ref_pub_->publish(trajectory_ref);
     } else if (offboard_flag_ == 6) { // VTOL trajectory (velocity) reference
         TrajectorySetpoint trajectory_ref; // https://github.com/PX4/px4_msgs/blob/release/1.17/msg/TrajectorySetpoint.msg
+        trajectory_ref.position = {NAN, NAN, NAN}; // Unused
+        trajectory_ref.acceleration = {NAN, NAN, NAN}; // Unused
+        trajectory_ref.jerk = {NAN, NAN, NAN}; // Unused
         trajectory_ref.timestamp = current_time_us;
         offboard_mode.velocity = true;
         trajectory_ref.velocity = {20.0, 0.0, 0.0};
