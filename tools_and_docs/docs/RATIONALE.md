@@ -29,8 +29,9 @@ This is the challenge—and good sport—of **vertical/full-stack integration** 
 
 ## Presentations and Papers
 
-- ["On the System Design Reality Gap" (January 2026) Aerial Robotics Meeting](https://docs.google.com/presentation/d/1Sz0d7WPWNwgCM3Q49Nnq1mvkSwPyK_CCQ7viHxO_Ucs)
-- ["aerial-autonomy-stack—a Faster-than-real-time, Autopilot-agnostic, ROS2 Framework to Simulate and Deploy Perception-based Drones" (June 2026) International Conference on Unmanned Aircraft Systems (ICUAS)](https://arxiv.org/abs/2602.07264)
+- Open Robotics Aerial Robotics Meeting: ["On the System Design Reality Gap"](https://docs.google.com/presentation/d/1Sz0d7WPWNwgCM3Q49Nnq1mvkSwPyK_CCQ7viHxO_Ucs) (January 22, 2026)
+- Paper: ["aerial-autonomy-stack—a Faster-than-real-time, Autopilot-agnostic, ROS2 Framework to Simulate and Deploy Perception-based Drones"](https://arxiv.org/abs/2602.07264) (2026) International Conference on Unmanned Aircraft Systems (ICUAS), Corfu, Greece
+- Slides: [`aerial-autonomy-stack`](https://www.dropbox.com/scl/fi/2gzki29sqrd67k3g0ctbz/icuas2026.pptx?rlkey=chflf9twnk1n6dptfx2huxa7o&st=kglsygkk&dl=0) in ICUAS 2026 regular session on "UAS Testbeds" (June 17, 2026)
 
 ## Related Work
 
