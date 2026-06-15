@@ -3,6 +3,14 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
+# Enable starting the aircraft container from SSH
+if [[ -n "$SSH_CLIENT" ]]; then
+  export DISPLAY=":0"
+  export XAUTHORITY="/run/user/1000/gdm/Xauthority"
+  echo "SSH session detected, setting DISPLAY=$DISPLAY and XAUTHORITY=$XAUTHORITY"
+  AAS_SSH_OPTS="--volume $XAUTHORITY:$XAUTHORITY:ro --env XAUTHORITY=$XAUTHORITY"
+fi
+
 # Set up the aircraft
 AUTOPILOT="${AUTOPILOT:-px4}" # Options: px4 (default), ardupilot
 HEADLESS="${HEADLESS:-true}" # Options: true (default), false 
@@ -95,6 +103,7 @@ docker run $DOCKER_RUN_FLAGS \
   --privileged \
   --name aircraft-container_$DRONE_ID \
   ${DEV_OPTS} \
+  ${AAS_SSH_OPTS} \
   aircraft-image
 
 # Check ONNX runtimes

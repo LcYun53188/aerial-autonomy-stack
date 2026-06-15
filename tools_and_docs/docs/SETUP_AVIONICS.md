@@ -29,6 +29,7 @@ sdkmanager                          # Log in with your https://developer.nvidia.
 - Power-off, put the board out of recovery mode, disconnect the USB-C cable, and power-on again
 - With a screen, mouse, and keyboard connected to the Jetson basedboad, log in, finish the configuration
 - Select an appropriate "Power Mode" (e.g. MAXN or 25W)
+- Under "Settings" -> "Users", enable "Automatic Login"
 
 <!--
 - [PX4 documentation](https://github.com/PX4/PX4-Autopilot/blob/main/docs/en/companion_computer/holybro_pixhawk_jetson_baseboard.md#flashing-the-jetson-board)
