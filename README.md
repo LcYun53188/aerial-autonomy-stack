@@ -184,7 +184,7 @@ done
 
 > AAS is tested on a [Holybro Jetson Baseboard](https://holybro.com/products/pixhawk-jetson-baseboard) with Pixhawk 6X and NVIDIA Orin NX 16GB
 >
-> The default quad is a [Holybro X650](https://holybro.com/collections/multicopter-kit/products/x650-kits?variant=43994378240189) with the [IMX219](https://docs.arducam.com/Nvidia-Jetson-Camera/Native-Camera/imx219/) camera and the [Livox Mid-360](https://www.livoxtech.com/mid-360/specs) LiDAR
+> The default quad is a [Holybro X650](https://holybro.com/collections/multicopter-kit/products/x650-kits?variant=43994378240189) with the [IMX219](https://docs.arducam.com/Nvidia-Jetson-Camera/Native-Camera/imx219/) camera and the [Livox Mid-360S](https://www.livoxtech.com/mid-360s/specs) LiDAR
 >
 > Read [`SETUP_AVIONICS.md`](/tools_and_docs/docs/SETUP_AVIONICS.md) and [`BOM.md`](/tools_and_docs/docs/BOM.md) to setup the requirements on the Jetson and configure the Pixhawk
 

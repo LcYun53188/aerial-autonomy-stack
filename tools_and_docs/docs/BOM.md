@@ -18,7 +18,7 @@
 | 10  | ASIX AX88772A USB2.0 Ethernet Adapter | 1 for `AIR_SUBNET`, 1 for `SIM_SUBNET` (for HITL only) | 18         | [URL][eth]
 | 11  | Doodle Labs RM-2450-11N3              | 2.4GHz Nano radio module (1 ground + 1 per drone)      | 1700       | [URL][doot1]
 | 12  | Doodle Labs EK-2450-11N3              | Nano carrier/evaluation kit (1 ground + 1 per drone)   | 290        | [URL][doot2]
-| 13  | DJI Livox Mid-360**                   | LiDAR sensor                                           | 749        | [URL][liv]
+| 13  | DJI Livox Mid-360S**                  | LiDAR sensor                                           | 679        | [URL][liv]
 | 14  | Livox three-wire aviation connector** | Power and ethernet connector for the LiDAR             | 89         | [URL][liv2]
 
 > *For a single drone, one can alternatively use the point-to-point [SiK telemetry radio][telem2] (89)
@@ -96,7 +96,7 @@ flowchart TB
 [batt]:https://genstattu.com/tattu-8000mah-22-2v-25c-6s1p-lipo-battery-pack-with-xt60-plug.html
 [jetson]:https://holybro.com/collections/flight-controllers/products/pixhawk-jetson-baseboard?variant=44636223439037
 [eth]:https://www.amazon.ca/TRENDnet-TU2-ET100-USB-Mbps-Adapter/dp/B00007IFED/
-[liv]:https://store.dji.com/ca/product/livox-mid-360?vid=130851
+[liv]:https://store.dji.com/ca/product/livox-mid-360s?vid=219111
 [liv2]:https://store.dji.com/ca/product/livox-three-wire-aviation-connector?vid=117441
 [doot1]:https://www.mouser.ca/ProductDetail/Doodle-Labs/RM-2450-11N3?qs=ulEaXIWI0c91eCn7VRB%2FpA%3D%3D
 [doot2]:https://www.mouser.ca/ProductDetail/Doodle-Labs/EK-2450-11N3?qs=ulEaXIWI0c%2FLOqPeL4gNgg%3D%3D
