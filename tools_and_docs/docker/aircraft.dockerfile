@@ -250,7 +250,7 @@ RUN apt-get update && \
 COPY /_github_clones/open_vins /aas/github_ws/src/open_vins
 WORKDIR /aas/github_ws
 # Explicitly use bash, not sh, to source and build the workspace
-# Limit resource usage to avoid freezes on resource-constrained hosts and using flag --cmake-args -DENABLE_ARUCO_TAGS=OFF (the Jetson base image lacks libopencv-contrib-dev)
+# Limiting resource usage to avoid freezes on resource-constrained hosts and using flag --cmake-args -DENABLE_ARUCO_TAGS=OFF (the Jetson base image lacks libopencv-contrib-dev)
 RUN MAKEFLAGS='-j4' NINJAJOBS='-j4' bash -c "source /opt/ros/humble/setup.bash && colcon build --event-handlers console_cohesion+ --packages-select ov_core ov_init ov_msckf ov_eval --cmake-args -DENABLE_ARUCO_TAGS=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release"
 
 # Install SPARK-FAST-LIO, based on https://github.com/MIT-SPARK/spark-fast-lio#package-how-to-install
@@ -312,6 +312,54 @@ WORKDIR /aas/github_ws
 # Explicitly use bash, not sh, to source and build the workspace, pass CMAKE_POLICY_VERSION_MINIMUM as env var for nested builds
 RUN CMAKE_POLICY_VERSION_MINIMUM=3.5 bash -c "source /opt/ros/humble/setup.bash && colcon build --packages-select kiss_matcher_ros --cmake-args -DCMAKE_BUILD_TYPE=Release"
 
+# Install mimosa, based on https://github.com/ntnu-arl/mimosa/tree/dev/ros2#common-setup
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libgoogle-glog-dev libspdlog-dev ros-humble-pcl-ros \
+    && apt clean \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /aas/mimosa_custom_gtsam_ws/src
+COPY /_github_clones/mimosa /aas/mimosa_custom_gtsam_ws/src/mimosa
+# Download config_utilities (branch: dev/mimosa), gtsam (branch: feature/imu_factor_with_gravity), and gtsam_points (branch: minimal_updated)
+RUN mkdir -p config_utilities \
+    && wget -qO- https://github.com/ntnu-arl/config_utilities/archive/refs/heads/dev/mimosa.tar.gz | tar -xz -C config_utilities --strip-components=1 \
+    && mkdir -p gtsam \
+    && wget -qO- https://github.com/ntnu-arl/gtsam/archive/refs/heads/feature/imu_factor_with_gravity.tar.gz | tar -xz -C gtsam --strip-components=1 \
+    && mkdir -p gtsam_points \
+    && wget -qO- https://github.com/ntnu-arl/gtsam_points/archive/refs/heads/minimal_updated.tar.gz | tar -xz -C gtsam_points --strip-components=1
+WORKDIR /aas/mimosa_custom_gtsam_ws
+# Fix ROS 2 Humble compatibility:
+# 1. mimosa expects cv_bridge.hpp (Iron/Jazzy), but Humble uses cv_bridge.h
+# 2. mimosa uses recv_timestamp (Iron/Jazzy), but Humble uses time_stamp
+RUN grep -rl "cv_bridge/cv_bridge.hpp" /aas/mimosa_custom_gtsam_ws/src/mimosa | xargs sed -i 's|cv_bridge/cv_bridge\.hpp|cv_bridge/cv_bridge.h|g' \
+    && grep -rl "recv_timestamp" /aas/mimosa_custom_gtsam_ws/src/mimosa | xargs sed -i 's/recv_timestamp/time_stamp/g'
+# Explicitly use bash, not sh, to source and build the workspace
+# Build mimosa's GTSAM fork and gtsam_points with -DBUILD_SHARED_LIBS=OFF -DGTSAM_BUILD_SHARED_LIBRARY=OFF, not to shadow the system-wide GTAM used by SuperOdom, KISS-Matcher
+RUN bash -c "source /opt/ros/humble/setup.bash && source /aas/github_ws/install/setup.bash && \
+    colcon build --packages-select gtsam gtsam_points --cmake-args -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release \
+    -DGTSAM_POSE3_EXPMAP=ON -DGTSAM_ROT3_EXPMAP=ON -DGTSAM_USE_QUATERNIONS=ON -DGTSAM_USE_SYSTEM_EIGEN=ON -DGTSAM_BUILD_WITH_MARCH_NATIVE=OFF -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF -DGTSAM_WITH_TBB=OFF \
+    -DBUILD_SHARED_LIBS=OFF -DGTSAM_BUILD_SHARED_LIBRARY=OFF"
+# Build the rest of the mimosa workspace with the static GTSAM from mimosa's fork (limiting resource usage to avoid freezes on resource-constrained hosts)
+RUN MAKEFLAGS='-j4' NINJAJOBS='-j4' bash -c "source /opt/ros/humble/setup.bash && source /aas/github_ws/install/setup.bash && source /aas/mimosa_custom_gtsam_ws/install/setup.bash && \
+    colcon build --packages-up-to mimosa --packages-skip gtsam gtsam_points --cmake-args -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release"
+
+# Install rovio (ROS 2 porting of https://github.com/ethz-asl/rovio), based on https://github.com/JacopoPan/rovio_ros2#installation
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends freeglut3-dev libglew-dev \
+    # valgrind \
+    && apt clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir kindr \
+    && wget -qO- https://github.com/ethz-asl/kindr/archive/refs/heads/master.tar.gz | tar -xz -C kindr --strip-components=1 \
+    && cd kindr \
+    && mkdir build && cd build \
+    && cmake .. -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    && make install
+COPY /_github_clones/rovio /aas/github_ws/src/rovio
+WORKDIR /aas/github_ws
+# Explicitly use bash, not sh, to source and build the workspace
+RUN bash -c "source /opt/ros/humble/setup.bash && source /aas/github_ws/install/setup.bash && source /aas/mimosa_custom_gtsam_ws/install/setup.bash && \
+    colcon build --packages-up-to rovio --cmake-args -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DMAKE_SCENE=ON -DENABLE_VALGRIND_COMPATIBILITY=OFF"
+
 ################################################################################
 # Add analysis tools and YOLO models ###########################################
 ################################################################################
@@ -364,8 +412,9 @@ COPY simulation/simulation_resources/aircraft_models/sensor_config.yaml /aas/air
 
 # Source the workspaces
 RUN echo "source /aas/github_ws/install/setup.bash" >> /root/.bashrc \
+    && echo "source /aas/mimosa_custom_gtsam_ws/install/setup.bash" >> /root/.bashrc \
     && echo "source /aas/aircraft_ws/install/setup.bash" >> /root/.bashrc
-# If needed (but already in .bashrc) $ source /opt/ros/humble/setup.bash && source /aas/github_ws/install/setup.bash && source /aas/aircraft_ws/install/setup.bash
+# If needed (but already in .bashrc) $ source /opt/ros/humble/setup.bash && source /aas/github_ws/install/setup.bash && source /aas/mimosa_custom_gtsam_ws/install/setup.bash && source /aas/aircraft_ws/install/setup.bash
 
 # Final config
 WORKDIR /aas
