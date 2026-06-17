@@ -61,21 +61,17 @@ done
 
 ![workspace](https://github.com/user-attachments/assets/ad909fcc-69de-44ac-84b3-c5bc7a1c896f)
 
-On one terminal, start AAS:
+Start AAS:
 
 ```sh
 cd aerial-autonomy-stack/tools_and_docs/
 AUTOPILOT=px4 NUM_QUADS=1 NUM_VTOLS=1 WORLD=swiss_town HEADLESS=false RTF=3.0 ./sim_run.sh    # Start a simulation, check the script for more options (note: ArduPilot SITL checks take ~30s of simulated time before being ready to arm)
 ```
 
-On another terminal, fly all drones:
+In the `Ground`'s Xterm terminal, fly all drones in a coordinated formation:
 
 ```sh
-for ID in {1..2}; do
-  docker exec -d aircraft-container-inst0_$ID bash -c "source /opt/ros/humble/setup.bash &&
-    source /aas/github_ws/install/setup.bash && source /aas/aircraft_ws/install/setup.bash &&
-    ros2 run mission mission --conops yalla.yaml --ros-args -r __ns:=/Drone$ID -p use_sim_time:=true"
-done
+ros2 run drone_traffic_controller dtc_controller --ros-args -p use_sim_time:=true
 ```
 
 `./sim_run.sh` options:
@@ -129,12 +125,15 @@ done
 > ros2 topic echo /gimbal_state
 > ros2 topic pub -1 /gimbal_pitch_cmd std_msgs/msg/Float64 "{data: 1.57}"
 > ```
-> To analyze the flight logs in the `Simulation`'s Xterm terminal:
+> To analyze the flight logs, in the `Simulation`'s Xterm terminal:
 > ```sh
 > /aas/simulation_resources/scripts/plot_logs.sh                                                # Analyze the flight logs at http://10.42.90.100:5006/browse or in MAVExplorer
 > ```
->
-> To create a new mission, re-implement [`test_mission.yaml`](/aircraft/aircraft_resources/missions/test_mission.yaml)
+> To fly a pre-planned mission, in any of the `QUAD`/`VTOL` Xterm terminals:
+> ```sh
+> ros2 run mission mission --conops yalla.yaml --ros-args -r __ns:=/Drone$ID -p use_sim_time:=true
+> ```
+> To create a new mission, re-implement [`yalla.yaml`](/aircraft/aircraft_resources/missions/yalla.yaml)
 > </details>
 > <details>
 > <summary>Add or disable <b>wind effects</b>, in the <kbd>Simulation</kbd>'s Xterm terminal <i>(click to expand)</i></summary>
@@ -329,37 +328,41 @@ flowchart TB
 
         subgraph gnd ["#nbsp;ground#nbsp;container#nbsp;(amd64)"]
             mlrouter{{mavlink-router}}:::bridge
-            ground_system[/ground_system\]:::algo
+            ground_system(ground_system):::algo
+            dtc_controller(dtc_controller):::algo
             qgc(QGroundControl):::resource
             zenoh_gnd{{zenoh-bridge}}:::bridge
 
             ground_system --> |"/tracks"| zenoh_gnd
+            dtc_controller --> |"/dtc_commands"| zenoh_gnd
             mlrouter <--> qgc
             mlrouter --> ground_system
         end
 
         subgraph air ["[N#nbsp;x]#nbsp;aircraft#nbsp;container(s)#nbsp;(amd64,#nbsp;arm64)"]
             subgraph perception [Perception]
-                yolo_py[/yolo_py/]:::algo
-                kiss_icp[/kiss_icp/]:::algo
-            end
-            subgraph control [Control]
-                offboard_control(offboard_control):::algo
-                autopilot_interface(autopilot_interface):::algo
-                mission(mission):::algo
-            end
-            ap_link{{"uxrce_dds <br/> || MAVROS"}}:::bridge
-            subgraph swarm [Swarm]
-                state_sharing[/state_sharing\]:::algo
+                yolo_py(yolo_py):::algo
+                kiss_icp(kiss_icp):::algo
+                livo_pkgs(livo_pgks):::algo
             end
             zenoh_air{{zenoh-bridge}}:::bridge
+            subgraph control [Control]
+                mission(mission):::algo
+                dtc_client(dtc_client):::algo
+                offboard_control(offboard_control):::algo
+                autopilot_interface(autopilot_interface):::algo
+                state_sharing(state_sharing):::algo
+            end
+            ap_link{{"uxrce_dds <br/> || MAVROS"}}:::bridge
 
+            zenoh_air --> |"/dtc_commands"| dtc_client
             kiss_icp -.-> |"/TBD"| ap_link
-            ap_link <--> autopilot_interface
             ap_link --> state_sharing
+            ap_link <--> autopilot_interface
             yolo_py --> |"/detections"| offboard_control
             offboard_control --> |"/reference"| autopilot_interface
             mission --> |"ros2 action/srv"| autopilot_interface
+            dtc_client --> |"ros2 action/srv"| autopilot_interface
             zenoh_air <--> |"/state_drone_n"| state_sharing
         end
 
@@ -367,8 +370,9 @@ flowchart TB
     end
 
     repo ~~~ gz
-    gz --> |"gz_gst_bridge <br/> [SIM_SUBNET]"| yolo_py
+    autopilot_interface ~~~ state_sharing
     gz --> |"/lidar_points <br/> [SIM_SUBNET]"| kiss_icp
+    gz --> |"gz_gst_bridge <br/> [SIM_SUBNET]"| yolo_py
     sitl <--> |"UDP <br/> [SIM_SUBNET]"| ap_link
     sitl <--> |"MAVLink <br/> [SIM_SUBNET]"| mlrouter 
     zenoh_gnd <-.-> |"TCP <br/> [AIR_SUBNET]"| zenoh_air
@@ -382,9 +386,9 @@ flowchart TB
 
     class aas,repo blueStyle;
     class air,gnd,sim whiteStyle;
-    class perception,control,models,swarm greyStyle;
-    linkStyle 14,15,16,17 stroke:teal,stroke-width:3px;
-    linkStyle 18 stroke:blue,stroke-width:4px;
+    class perception,control,models greyStyle;
+    linkStyle 18,19,20,21 stroke:teal,stroke-width:3px;
+    linkStyle 22 stroke:blue,stroke-width:4px;
 ```
 
 <details>
@@ -402,6 +406,7 @@ aerial-autonomy-stack
 │   ├── aircraft_ws
 │   │   └── src
 │   │       ├── autopilot_interface                   # Ardupilot/PX4 high-level actions (Takeoff, Orbit, Offboard, Land)
+│   │       ├── drone_traffic_client                  # Subscriber of topic `/dtc_commands` enforcing high-level actions from the ground
 │   │       ├── imu_publisher                         # Multiplexer between PX4/DDS and ArduPilot/MAVROS sensor topics
 │   │       ├── mission                               # Orchestrator of the actions in `autopilot_interface`
 │   │       ├── offboard_control                      # Low-level references for the Offboard action in `autopilot_interface`
@@ -413,6 +418,7 @@ aerial-autonomy-stack
 ├── ground
 │   ├── ground_ws
 │   │   └── src
+│   │       ├── drone_traffic_controller              # Publisher of topic `/dtc_commands` broadcasted by Zenoh
 │   │       └── ground_system                         # Publisher of topic `/tracks` broadcasted by Zenoh
 │   │
 │   └── ground.yml.erb                                # Ground docker tmux entrypoint
@@ -458,7 +464,7 @@ aerial-autonomy-stack
 
 - [x] Host OS: [Ubuntu 22.04/24.04/26.04 (LTS, ESM 4/2036)](https://ubuntu.com/about/release-cycle)
 - [ ] Jetpack: [6.2.1 (rev. 1) [L4T 36.4.4, Ubuntu 22-based]](https://developer.nvidia.com/embedded/jetpack-archive)
-    - **TODO: test on JP 6.2.2 [L4T 36.5.0, Ubuntu 22-based]**
+    - **TODO: upgrade to JP 7.2 [L4T 39.2, Ubuntu 24-based]**
 - [x] [`nvidia-driver-580`](https://developer.nvidia.com/datacenter-driver-archive)
 - [x] [Docker Engine v29](https://docs.docker.com/engine/release-notes/)
 - [x] [NVIDIA Container Toolkit 1.19](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/index.html)
