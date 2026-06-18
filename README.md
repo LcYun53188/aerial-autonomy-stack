@@ -70,17 +70,17 @@ AUTOPILOT=px4 NUM_QUADS=1 NUM_VTOLS=1 WORLD=swiss_town HEADLESS=false RTF=3.0 ./
 
 There are **3 ways** to autonomously fly the drones (plus QGroundControl)
 
-1. From the `Ground`'s Xterm terminal, fly all drones in a **synchronized formation**:
+1. From the `Ground`'s Xterm terminal, fly all drones in a **synchronized formation** with [`dtc_controller_node`](/ground/ground_ws/src/drone_traffic_controller/drone_traffic_controller/dtc_controller_node.py):
 ```sh
 ros2 run drone_traffic_controller dtc_controller --ros-args -p use_sim_time:=true
 ```
 
-2. In any of the `QUAD`/`VTOL` Xterm terminals, fly a **pre-planned mission** (e.g., [`yalla.yaml`](/aircraft/aircraft_resources/missions/yalla.yaml)):
+2. From any `QUAD`/`VTOL` Xterm terminal, fly a **pre-planned mission** (e.g., [`yalla.yaml`](/aircraft/aircraft_resources/missions/yalla.yaml)):
 ```sh
 ros2 run mission mission --conops yalla.yaml --ros-args -r __ns:=/Drone$ID -p use_sim_time:=true
 ```
 
-3. In any of the `QUAD`/`VTOL` Xterm terminals, use **ROS2 actions** for [`px4_offboard`](/aircraft/aircraft_ws/src/offboard_control/src/px4_offboard.cpp)/[`ardupilot_guided`](/aircraft/aircraft_ws/src/offboard_control/src/ardupilot_guided.cpp)
+3. From any `QUAD`/`VTOL` Xterm terminal, use **ROS2 actions** for [`px4_offboard`](/aircraft/aircraft_ws/src/offboard_control/src/px4_offboard.cpp)/[`ardupilot_guided`](/aircraft/aircraft_ws/src/offboard_control/src/ardupilot_guided.cpp):
 ```sh
 cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/takeoff_action \
     autopilot_interface_msgs/action/Takeoff '{takeoff_altitude: 30.0}'"
