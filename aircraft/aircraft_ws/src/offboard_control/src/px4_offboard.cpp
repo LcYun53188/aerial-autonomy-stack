@@ -348,10 +348,11 @@ void PX4Offboard::offboard_loop_callback()
 void PX4Offboard::att_ref_test(OffboardControlMode& mode)
 {
     mode.attitude = true;
-    VehicleAttitudeSetpoint attitude_ref;
+    VehicleAttitudeSetpoint attitude_ref; // https://github.com/PX4/px4_msgs/blob/release/1.17/msg/VehicleAttitudeSetpoint.msg
     attitude_ref.timestamp = mode.timestamp;
     if (vehicle_type_ == 1) { // ROTARY_WING
-        double pitch_rad = -5.0 * M_PI / 180.0; // Negative pitch to move forward (any duration, drops some altitude)
+        double pitch_rad = -5.0 * M_PI / 180.0; // Negative pitch to move forward/north (any duration, drops some altitude)
+        // Note: quaternion in world frame
         attitude_ref.q_d[0] = cos(pitch_rad / 2.0); // w
         attitude_ref.q_d[1] = 0;                    // x
         attitude_ref.q_d[2] = sin(pitch_rad / 2.0); // y

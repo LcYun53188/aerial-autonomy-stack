@@ -354,7 +354,8 @@ void ArdupilotGuided::att_ref_test()
     auto att_msg = mavros_msgs::msg::AttitudeTarget(); // https://docs.ros.org/en/noetic/api/mavros_msgs/html/msg/AttitudeTarget.html
     att_msg.header.stamp = this->get_clock()->now();
     att_msg.header.frame_id = "map"; // World frame
-    double pitch_rad = 5.0 * M_PI / 180.0; // Positive pitch to move forward (any duration)
+    double pitch_rad = 5.0 * M_PI / 180.0; // Positive pitch to move forward/east (any duration)
+    // Note: quaternion in world frame
     att_msg.orientation.w = std::cos(pitch_rad / 2.0);
     att_msg.orientation.x = 0.0;
     att_msg.orientation.y = std::sin(pitch_rad / 2.0);
