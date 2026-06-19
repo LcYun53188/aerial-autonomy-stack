@@ -161,8 +161,19 @@ INS_HNTCH_FREQ      40              # Base frequency, lower than the default 80 
 INS_HNTCH_BW        20              # Half of INS_HNTCH_FREQ
 # Check INS_HNTCH_OPTS is set to 0
 
+# Failsafes
+FS_THR_ENABLE      0                # Disabled (the Boxer/R81 V2 combo does not send zero pulses)
+FS_GCS_ENABLE      1                # Commands an RTL if the QGC link is lost
+FS_GCS_TIMEOUT     5                # The timeout before the GCS failsafe engages
+BATT_LOW_VOLT      21.6             # Triggers the low failsafe at 3.6V per cell (Tattu G-Tech 6S 8000mAh 25C 22.2V)
+BATT_LOW_MAH       1600             # Triggers the low failsafe when 20% of 8000mAh (Tattu G-Tech 6S 8000mAh 25C 22.2V)
+BATT_FS_LOW_ACT    2                # Commands an RTL when either of the low thresholds is breached
+BATT_CRT_VOLT      21.0             # Triggers the critical failsafe at 3.5V per cell (Tattu G-Tech 6S 8000mAh 25C 22.2V)
+BATT_CRT_MAH       800              # Triggers the critical failsafe when 10% of 8000mAh (Tattu G-Tech 6S 8000mAh 25C 22.2V)
+BATT_FS_CRT_ACT    1                # Commands an immediate LAND when either of the low thresholds is breached
+
 # In QGC -> Vehicle Configuration -> Radio, calibrate the Radiomaster Boxer RC (revise FS_THR_VALUE, if necessary)
 # In QGC -> Vehicle Configuration -> Flight Modes, set one switch for Stabilized/AltHold/Loiter, one for RTL
-# In QGC -> Vehicle Configuration -> Safety, set battery and general failsafes, RTL settings
+# In QGC -> Vehicle Configuration -> Flight Safety, set RTL settings
 # In QGC -> Vehicle Configuration -> Sensors, calibrate accelerometer, level horizon, and compass (outdoors)
 ```
