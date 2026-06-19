@@ -53,6 +53,7 @@ if [[ "$GROUND" == "true" ]]; then
     --net=host \
     --privileged \
     --name ground-container \
+    --volume ~/Downloads/:/mounted_downloads_folder \
     ground-image
   exit 0
 fi
@@ -102,6 +103,7 @@ docker run $DOCKER_RUN_FLAGS \
   --net=host \
   --privileged \
   --name aircraft-container_$DRONE_ID \
+  --volume ~/Downloads/:/mounted_downloads_folder \
   ${DEV_OPTS} \
   ${AAS_SSH_OPTS} \
   aircraft-image
