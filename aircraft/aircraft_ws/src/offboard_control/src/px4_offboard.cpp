@@ -351,12 +351,17 @@ void PX4Offboard::att_ref_test(OffboardControlMode& mode)
     VehicleAttitudeSetpoint attitude_ref; // https://github.com/PX4/px4_msgs/blob/release/1.17/msg/VehicleAttitudeSetpoint.msg
     attitude_ref.timestamp = mode.timestamp;
     if (vehicle_type_ == 1) { // ROTARY_WING
-        double pitch_rad = -5.0 * M_PI / 180.0; // Negative pitch to move forward/north (any duration, drops some altitude)
-        // Note: quaternion in world frame
-        attitude_ref.q_d[0] = cos(pitch_rad / 2.0); // w
-        attitude_ref.q_d[1] = 0;                    // x
-        attitude_ref.q_d[2] = sin(pitch_rad / 2.0); // y
-        attitude_ref.q_d[3] = 0;                    // z
+        double pitch_rad = -5.0 * M_PI / 180.0; // Negative pitch to move forward (any duration, drops some altitude)
+        // Get current yaw and desired pitch
+        double cy = cos(heading_ / 2.0);
+        double sy = sin(heading_ / 2.0);
+        double cp = cos(pitch_rad / 2.0);
+        double sp = sin(pitch_rad / 2.0);
+        // Quaternion reference: Q_yaw * Q_pitch (the reference is in PX4 NED world frame)
+        attitude_ref.q_d[0] = cy * cp;          // w
+        attitude_ref.q_d[1] = -sy * sp;         // x
+        attitude_ref.q_d[2] = cy * sp;          // y
+        attitude_ref.q_d[3] = sy * cp;          // z
         attitude_ref.thrust_body = {0.0, 0.0, -0.72};
     } else if (vehicle_type_ == 2) { // FIXED_WING
         double pitch_rad = -30.0 * M_PI / 180.0; // Negative pitch to dive

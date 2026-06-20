@@ -354,12 +354,18 @@ void ArdupilotGuided::att_ref_test()
     auto att_msg = mavros_msgs::msg::AttitudeTarget(); // https://docs.ros.org/en/noetic/api/mavros_msgs/html/msg/AttitudeTarget.html
     att_msg.header.stamp = this->get_clock()->now();
     att_msg.header.frame_id = "map"; // World frame
-    double pitch_rad = 5.0 * M_PI / 180.0; // Positive pitch to move forward/east (any duration)
-    // Note: quaternion in world frame
-    att_msg.orientation.w = std::cos(pitch_rad / 2.0);
-    att_msg.orientation.x = 0.0;
-    att_msg.orientation.y = std::sin(pitch_rad / 2.0);
-    att_msg.orientation.z = 0.0;
+    double pitch_rad = 5.0 * M_PI / 180.0; // Positive pitch to move forward (any duration)
+    // Get current yaw and desired pitch
+    double yaw_enu_rad = (M_PI / 2.0) - (heading_ * M_PI / 180.0); // Convert VfrHud compass degrees to ENU radians
+    double cy = std::cos(yaw_enu_rad / 2.0);
+    double sy = std::sin(yaw_enu_rad / 2.0);
+    double cp = std::cos(pitch_rad / 2.0);
+    double sp = std::sin(pitch_rad / 2.0);
+    // Quaternion reference: Q_yaw * Q_pitch (the reference is in ROS ENU world frame)
+    att_msg.orientation.w = cy * cp;
+    att_msg.orientation.x = -sy * sp;
+    att_msg.orientation.y = cy * sp;
+    att_msg.orientation.z = sy * cp;
     att_msg.thrust = 0.5; // Normalized scalar between 0.0 (zero thrust) and 1.0 (max thrust)
     // Ignore roll/pitch/yaw rates
     att_msg.type_mask = mavros_msgs::msg::AttitudeTarget::IGNORE_ROLL_RATE |
