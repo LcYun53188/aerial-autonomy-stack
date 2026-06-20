@@ -1,6 +1,6 @@
 # aerial-autonomy-stack
 
-*Aerial autonomy stack* (AAS) is an all-in-one software stack to:
+*Aerial autonomy stack* (AAS) is a *batteries included* software stack to:
 
 1. **Develop** multi-drone autonomy—with ROS2, PX4, and ArduPilot
 2. **Simulate** faster-than-real-time perception and control—with YOLO and 3D LiDAR
@@ -68,7 +68,7 @@ cd aerial-autonomy-stack/tools_and_docs/
 AUTOPILOT=px4 NUM_QUADS=1 NUM_VTOLS=1 WORLD=swiss_town HEADLESS=false RTF=3.0 ./sim_run.sh    # Start a simulation, check the script for more options (note: ArduPilot SITL checks take ~30s of simulated time before being ready to arm)
 ```
 
-There are **3 ways** to autonomously fly the drones (plus QGroundControl)
+There are **3 main ways** to autonomously fly the drones (plus QGroundControl for operator supervision)
 
 1. From the `Ground`'s Xterm terminal, fly all drones in a **synchronized formation** with [`dtc_controller_node`](/ground/ground_ws/src/drone_traffic_controller/drone_traffic_controller/dtc_controller_node.py):
 ```sh
