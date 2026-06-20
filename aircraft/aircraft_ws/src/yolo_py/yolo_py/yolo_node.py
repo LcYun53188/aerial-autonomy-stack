@@ -23,7 +23,7 @@ from cv_bridge import CvBridge
 CONF_THRESH = 0.5
 
 class YoloInferenceNode(Node):
-    def __init__(self, camera_id, headless, hitl, remote_video_streams, hfov, ros2_frame_publisher):
+    def __init__(self, camera_id, headless, hitl, remote_video_streams, hfov, ros2_frame_publisher, no_inference):
         super().__init__('yolo_inference_node')
         self.camera_id = camera_id
         self.headless = headless
@@ -31,6 +31,7 @@ class YoloInferenceNode(Node):
         self.remote_video_streams = remote_video_streams
         self.hfov = hfov
         self.ros2_frame_publisher = ros2_frame_publisher
+        self.run_inference = not no_inference # # Invert flag for readability
 
         self.udp_port = 5600 + self.camera_id  # 0 -> 5600, 1 -> 5601
         self.fx = None
@@ -39,12 +40,15 @@ class YoloInferenceNode(Node):
         self.cy = None
         self.architecture = platform.machine()
         
-        # Load classes
-        names_file = "/aas/yolo/coco.json"
-        with open(names_file, "r") as f:
-            self.classes = {int(k): v for k, v in json.load(f).items()}
-        colors_rgba = plt.cm.hsv(np.linspace(0, 1, len(self.classes)))
-        self.colors = (colors_rgba[:, [2, 1, 0]] * 255).astype(np.uint8) # From RGBA (0-1 float) to BGR (0-255 int)
+        if self.run_inference:
+            # Load classes
+            names_file = "/aas/yolo/coco.json"
+            with open(names_file, "r") as f:
+                self.classes = {int(k): v for k, v in json.load(f).items()}
+            colors_rgba = plt.cm.hsv(np.linspace(0, 1, len(self.classes)))
+            self.colors = (colors_rgba[:, [2, 1, 0]] * 255).astype(np.uint8) # From RGBA (0-1 float) to BGR (0-255 int)
+            # Pre-allocate reusable arrays for scaling to avoid allocation in hot loops
+            self.scale_factors = np.zeros(4, dtype=np.float32)
 
         # Defer model loading until the video stream is opened in run_inference_loop
         self.input_size = None
@@ -52,13 +56,11 @@ class YoloInferenceNode(Node):
         self.input_name = None
         
         # Create publishers
-        self.detection_publisher = self.create_publisher(Detection2DArray, f'detections', 10)
+        if self.run_inference:
+            self.detection_publisher = self.create_publisher(Detection2DArray, f'detections', 10)
         if self.ros2_frame_publisher:
             self.image_publisher = self.create_publisher(Image, f'camera_frames_{self.camera_id}', 10)
         self.bridge = CvBridge()
-
-        # Pre-allocate reusable arrays for scaling to avoid allocation in hot loops
-        self.scale_factors = np.zeros(4, dtype=np.float32)
         
         self.get_logger().info("YOLO inference started.")
 
@@ -175,42 +177,44 @@ class YoloInferenceNode(Node):
         print(f"Intrinsics: cx={self.cx:.2f}, cy={self.cy:.2f}, fx={self.fx:.2f}, fy={self.fy:.2f}")
         print(f"DFOV {dfov:.2f}deg, HFOV {hfov:.2f}deg, VFOV {vfov:.2f}deg")
 
-        # Load YOLO model and runtime
-        # Options, from fastest to most accurate, <10MB to >100MB: yolo26n, yolo26s, yolo26m, yolo26l, yolo26x, export in aircraft.dockerfile
-        if self.architecture == 'x86_64':
-            max_dim = max(stream_width, stream_height)
-            if max_dim <= 320:
-                print("Stream resolution is <=320. Selecting 320 model.")
-                model_path = "/aas/yolo/yolo26n_320.onnx"
-                self.input_size = 320 # YOLO input size
-            else:
-                print("Stream resolution is >320. Selecting 640 model.")
-                model_path = "/aas/yolo/yolo26n_640.onnx"
+        if self.run_inference:
+            # Load YOLO model and runtime
+            # Options, from fastest to most accurate, <10MB to >100MB: yolo26n, yolo26s, yolo26m, yolo26l, yolo26x, export in aircraft.dockerfile
+            if self.architecture == 'x86_64':
+                max_dim = max(stream_width, stream_height)
+                if max_dim <= 320:
+                    print("Stream resolution is <=320. Selecting 320 model.")
+                    model_path = "/aas/yolo/yolo26n_320.onnx"
+                    self.input_size = 320 # YOLO input size
+                else:
+                    print("Stream resolution is >320. Selecting 640 model.")
+                    model_path = "/aas/yolo/yolo26n_640.onnx"
+                    self.input_size = 640 # YOLO input size
+                print("Loading CUDAExecutionProvider on AMD64 (x86) architecture.")
+                self.session = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider"]) # For simulation
+            elif self.architecture == 'aarch64':
+                model_path = "/aas/yolo/yolo26n_640.onnx" # Real CSI camera IMX219-200 is 1280x720, we resize to 640x640 for YOLO (this is slightly wasteful when self.hitl = True)
                 self.input_size = 640 # YOLO input size
-            print("Loading CUDAExecutionProvider on AMD64 (x86) architecture.")
-            self.session = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider"]) # For simulation
-        elif self.architecture == 'aarch64':
-            model_path = "/aas/yolo/yolo26n_640.onnx" # Real CSI camera IMX219-200 is 1280x720, we resize to 640x640 for YOLO (this is slightly wasteful when self.hitl = True)
-            self.input_size = 640 # YOLO input size
-            print("Loading (with cache) TensorrtExecutionProvider on ARM64 architecture (Jetson).") # The first cache built takes ~10'
-            cache_path = "/tensorrt_cache" # Mounted as volume by main_deploy.sh
-            os.makedirs(cache_path, exist_ok=True)
-            provider_options = {
-                'trt_engine_cache_enable': True,
-                'trt_engine_cache_path': cache_path,
-                'trt_fp16_enable': True, # Optional: enable FP16 for Jetson speedup (from 22 to 12ms on YOLOn, longer cache build time, 10 vs 3')
-            }
-            self.session = ort.InferenceSession(
-                model_path,
-                providers=[('TensorrtExecutionProvider', provider_options)] # For deployment on Jetson Orin, 60Hz inference on the IMX219-200
-            )
+                print("Loading (with cache) TensorrtExecutionProvider on ARM64 architecture (Jetson).") # The first cache built takes ~10'
+                cache_path = "/tensorrt_cache" # Mounted as volume by main_deploy.sh
+                os.makedirs(cache_path, exist_ok=True)
+                provider_options = {
+                    'trt_engine_cache_enable': True,
+                    'trt_engine_cache_path': cache_path,
+                    'trt_fp16_enable': True, # Optional: enable FP16 for Jetson speedup (from 22 to 12ms on YOLOn, longer cache build time, 10 vs 3')
+                }
+                self.session = ort.InferenceSession(
+                    model_path,
+                    providers=[('TensorrtExecutionProvider', provider_options)] # For deployment on Jetson Orin, 60Hz inference on the IMX219-200
+                )
+            else:
+                print(f"Loading CPUExecutionProvider on an unknown architecture: {self.architecture}")
+                self.session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"]) # Backup, not recommended
+            self.input_name = self.session.get_inputs()[0].name
+            # Confirm execution providers
+            self.get_logger().info(f"Execution providers in use: {self.session.get_providers()}")
         else:
-            print(f"Loading CPUExecutionProvider on an unknown architecture: {self.architecture}")
-            self.session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"]) # Backup, not recommended
-        self.input_name = self.session.get_inputs()[0].name
-
-        # Confirm execution providers
-        self.get_logger().info(f"Execution providers in use: {self.session.get_providers()}")
+            self.get_logger().info("Inference disabled")
 
         if not self.headless:
             drone_id = os.getenv('DRONE_ID', '1')
@@ -248,17 +252,18 @@ class YoloInferenceNode(Node):
                 )
                 self.image_publisher.publish(self.bridge.cv2_to_imgmsg(frame, "bgr8", header=msg_header))
             
-            # Inference
-            with Profiler("do_yolo (includes ONNX Runtime)"):
-                boxes, confidences, class_ids = self.do_yolo(frame)
+            if self.run_inference:
+                # Inference
+                with Profiler("do_yolo (includes ONNX Runtime)"):
+                    boxes, confidences, class_ids = self.do_yolo(frame)
 
-            # Publish detections
-            if len(boxes) > 0:
-                self.publish_detections(boxes, confidences, class_ids)
+                # Publish detections
+                if len(boxes) > 0:
+                    self.publish_detections(boxes, confidences, class_ids)
 
-            # Draw detections on the frame
-            if len(boxes) > 0:
-                self.draw_detections(frame, boxes, confidences, class_ids)
+                # Draw detections on the frame
+                if len(boxes) > 0:
+                    self.draw_detections(frame, boxes, confidences, class_ids)
 
             # Visualize frame with detections
             if not self.headless:
@@ -459,12 +464,14 @@ def main(args=None):
     parser.add_argument('--remote-video-streams', action='store_true', help="Send video streams to the ground container.")
     parser.add_argument('--hfov', type=float, default=100.0, help="Horizontal field of view in degrees.")
     parser.add_argument('--ros2-frame-publisher', action='store_true', help="Publish raw frames to ROS 2.")
+    parser.add_argument('--no-inference', action='store_true', help="Disable YOLO inference and only run camera acquisition/streaming.")
     cli_args, ros_args = parser.parse_known_args()
 
     rclpy.init(args=ros_args)
 
     yolo_node = YoloInferenceNode(camera_id=cli_args.camera_id, headless=cli_args.headless, hitl=cli_args.hitl,
-        remote_video_streams=cli_args.remote_video_streams, hfov=cli_args.hfov, ros2_frame_publisher=cli_args.ros2_frame_publisher)
+        remote_video_streams=cli_args.remote_video_streams, hfov=cli_args.hfov, ros2_frame_publisher=cli_args.ros2_frame_publisher,
+        no_inference=cli_args.no_inference)
     yolo_node.run_inference_loop()
     
     yolo_node.destroy_node()
