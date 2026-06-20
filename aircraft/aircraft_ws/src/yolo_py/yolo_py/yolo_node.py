@@ -222,6 +222,9 @@ class YoloInferenceNode(Node):
             except queue.Empty:
                 self.get_logger().info("Frame queue is empty, is the stream running?")
                 continue
+            if frame is None or frame.size == 0:
+                self.get_logger().warn("Empty frame received. Skipping...")
+                continue
 
             # Publish raw frames in ROS
             if self.ros2_frame_publisher:
@@ -239,9 +242,13 @@ class YoloInferenceNode(Node):
             if len(boxes) > 0:
                 self.publish_detections(frame.shape, boxes, confidences, class_ids)
 
-            # Visualize
+            # Draw detections on the frame
+            if len(boxes) > 0:
+                self.draw_detections(frame, boxes, confidences, class_ids)
+
+            # Visualize frame with detections
             if not self.headless:
-                self.visualize(frame, boxes, confidences, class_ids)
+                cv2.imshow(self.WINDOW_NAME, frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
@@ -256,6 +263,7 @@ class YoloInferenceNode(Node):
                         "appsrc do-timestamp=true ! video/x-raw, format=BGR ! queue max-size-buffers=2 leaky=downstream ! "
                         "videoconvert ! videorate drop-only=true ! "
                         "video/x-raw, format=BGRx, max-framerate=10/1 ! nvvidconv ! "
+                        # "video/x-raw, format=I420, max-framerate=10/1 ! nvvidconv ! video/x-raw(memory:NVMM), format=NV12 ! "
                         "nvv4l2h265enc maxperf-enable=1 preset-level=1 insert-sps-pps=true idrinterval=30 ! "
                         f"h265parse ! rtph265pay pt=96 config-interval=1 mtu=1400 ! udpsink host={gnd_ip} port={port} sync=false async=false"
                     )
@@ -392,7 +400,7 @@ class YoloInferenceNode(Node):
 
         self.detection_publisher.publish(detection_array)
 
-    def visualize(self, frame, boxes, confidences, class_ids):
+    def draw_detections(self, frame, boxes, confidences, class_ids):
         for i in range(len(boxes)):
             cx, cy, w, h = boxes[i]
             x1 = int(cx - w/2)
@@ -405,7 +413,6 @@ class YoloInferenceNode(Node):
             color = self.colors[class_id].tolist()
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, f"{class_name} {conf:.2f}", (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1)
-        cv2.imshow(self.WINDOW_NAME, frame)
 
 class Profiler:
     __slots__ = ('name', 'interval', 'start')
