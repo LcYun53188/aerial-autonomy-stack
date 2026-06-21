@@ -274,7 +274,8 @@ class MissionNode(Node):
 
     def tick_tree(self):
         # Ticks the behavior tree and monitors its overall status
-        self.behaviour_tree.tick()
+        with self.data_lock: # Lock the data while the tree evaluates the blackboard
+            self.behaviour_tree.tick()
         status = self.behaviour_tree.root.status
         if status == py_trees.common.Status.SUCCESS:
             self.get_logger().info("Mission Complete!")

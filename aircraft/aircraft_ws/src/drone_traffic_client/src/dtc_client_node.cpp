@@ -162,8 +162,8 @@ private:
     float target_radius_, target_speed_, target_duration_;
     float target_vtol_heading_, target_vtol_loiter_n_, target_vtol_loiter_e_, target_vtol_loiter_alt_;
     std::string target_controller_name_;
-    bool action_accepted_;
-    bool request_being_sent_; // Prevent spamming the same command
+    std::atomic<bool> action_accepted_;
+    std::atomic<bool> request_being_sent_; // Prevent spamming the same command
 
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr cmd_sub_;
     rclcpp_action::Client<autopilot_interface_msgs::action::Takeoff>::SharedPtr tkf_cli_;
