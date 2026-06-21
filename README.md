@@ -199,6 +199,8 @@ cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/offboard_action \
 > The default quad is a [Holybro X650](https://holybro.com/collections/multicopter-kit/products/x650-kits?variant=43994378240189) with the [IMX219](https://docs.arducam.com/Nvidia-Jetson-Camera/Native-Camera/imx219/) camera and the [Livox Mid-360S](https://www.livoxtech.com/mid-360s/specs) LiDAR
 >
 > Read [`SETUP_AVIONICS.md`](/tools_and_docs/docs/SETUP_AVIONICS.md) and [`BOM.md`](/tools_and_docs/docs/BOM.md) to setup the requirements on the Jetson and configure the Pixhawk
+>
+> Read [`SETUP_CHRONY.md`](/tools_and_docs/docs/SETUP_CHRONY.md) to let the Jetson synchronize to the `ground-image` computer when without internet
 
 ```sh
 sudo apt update && sudo apt install -y git
