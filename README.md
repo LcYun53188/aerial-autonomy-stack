@@ -1,6 +1,6 @@
 # aerial-autonomy-stack
 
-*Aerial autonomy stack* (AAS) is a *batteries included* software stack to:
+*Aerial autonomy stack* (AAS) is a **batteries included** software stack to:
 
 1. **Develop** multi-drone autonomy—with ROS2, PX4, and ArduPilot
 2. **Simulate** faster-than-real-time perception and control—with YOLO and 3D LiDAR
@@ -358,7 +358,7 @@ flowchart TB
             subgraph perception [Perception]
                 yolo_py(yolo_py):::algo
                 kiss_icp(kiss_icp):::algo
-                livo_pkgs(livo_pgks):::algo
+                livo_pkgs(livo_pkgs):::algo
             end
             zenoh_air{{zenoh-bridge}}:::bridge
             subgraph control [Control]
@@ -368,25 +368,37 @@ flowchart TB
                 autopilot_interface(autopilot_interface):::algo
                 state_sharing(state_sharing):::algo
             end
-            ap_link{{"uxrce_dds <br/> || MAVROS"}}:::bridge
+            detection_split( ):::splitNode
+            track_split( ):::splitNode
 
+            ap_link{{"uxrce_dds <br/> || MAVROS"}}:::bridge
             kiss_icp -.-> |"/TBD"| ap_link
-            zenoh_air --> |"/tracks"| offboard_control
+            livo_pkgs <-.-> |"/imu_data <br/> /TBD"| ap_link
+            zenoh_air --> |"/tracks <br/> /state_drone_N"| track_split
+            track_split --> offboard_control
+            track_split --> mission
             zenoh_air --> |"/dtc_commands"| dtc_client
             ap_link --> state_sharing
             ap_link <--> autopilot_interface
-            yolo_py --> |"/detections"| offboard_control
-            offboard_control --> |"/reference"| autopilot_interface
-            mission --> |"ros2 action/srv"| autopilot_interface
-            dtc_client --> |"ros2 action/srv"| autopilot_interface
+            yolo_py --> |"/detections"| detection_split
+            detection_split --> offboard_control
+            detection_split --> mission
+            offboard_control --> |"/ctrl_ref"| autopilot_interface
+            mission --> |"ros2 action"| autopilot_interface
+            dtc_client --> |"ros2 action"| autopilot_interface
             zenoh_air <--> |"/state_drone_n"| state_sharing
             autopilot_interface ~~~ state_sharing
         end
-
+        lidar_split( ):::splitNode
+        camera_split( ):::splitNode
     end
 
-    gz --> |"/lidar_points <br/> [SIM_SUBNET]"| kiss_icp
-    gz --> |"gz_gst_bridge <br/> [SIM_SUBNET]"| yolo_py
+    gz --> |"/lidar_points <br/> [SIM_SUBNET]"| lidar_split
+    lidar_split --> kiss_icp
+    lidar_split --> livo_pkgs
+    gz --> |"gz_gst_bridge <br/> [SIM_SUBNET]"| camera_split
+    camera_split --> livo_pkgs
+    camera_split -->  yolo_py
     sitl <--> |"UDP <br/> [SIM_SUBNET]"| ap_link
     sitl <--> |"MAVLink <br/> [SIM_SUBNET]"| mlrouter 
     zenoh_gnd <-.-> |"TCP <br/> [AIR_SUBNET]"| zenoh_air
@@ -394,10 +406,11 @@ flowchart TB
     classDef bridge fill:#ffebd6,stroke:#f5a623,stroke-width:2px;
     classDef algo fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
     classDef resource fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef splitNode fill:#cccccc,stroke:#666666,stroke-width:2px;
     classDef blueStyle  fill:#e1f0ff,stroke:#666,stroke-width:2px; class aas blueStyle;
     classDef whiteStyle fill:#f9f9f9,stroke:#666,stroke-width:1px,stroke-dasharray: 5 5; class air,gnd,sim whiteStyle;
     classDef greyStyle  fill:#eeeeee,stroke:#666,stroke-width:1px,stroke-dasharray: 5 5; class perception,control,models greyStyle;
-    linkStyle 18,19,20,21 stroke:teal,stroke-width:3px; linkStyle 22 stroke:blue,stroke-width:4px;
+    linkStyle 23,24,25,26,27,28,29,30 stroke:teal,stroke-width:3px; linkStyle 31 stroke:blue,stroke-width:4px;
 ```
 
 <details>

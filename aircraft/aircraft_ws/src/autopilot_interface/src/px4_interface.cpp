@@ -302,23 +302,30 @@ void PX4Interface::set_speed_callback(const std::shared_ptr<autopilot_interface_
 void PX4Interface::set_reposition_callback(const std::shared_ptr<autopilot_interface_msgs::srv::SetReposition::Request> request,
                         std::shared_ptr<autopilot_interface_msgs::srv::SetReposition::Response> response)
 {
-    std::shared_lock<std::shared_mutex> lock(node_data_mutex_); // Use shared_lock for data reads
-    if ((is_vtol_) || (!is_vtol_ && !(aircraft_fsm_state_ == PX4InterfaceState::MC_HOVER || aircraft_fsm_state_ == PX4InterfaceState::MC_ORBIT))) {
-        response->message = "Set reposition rejected, PX4Interface is not in a quad hover/orbit state (for VTOLs, use /orbit_action)";
-        RCLCPP_ERROR(this->get_logger(), "%s", response->message.c_str());
-        response->success = false;
-        return;
-    }
+    {
+        std::shared_lock<std::shared_mutex> lock(node_data_mutex_); // Use shared_lock for data reads
+        if ((is_vtol_) || (!is_vtol_ && !(aircraft_fsm_state_ == PX4InterfaceState::MC_HOVER || aircraft_fsm_state_ == PX4InterfaceState::MC_ORBIT))) {
+            response->message = "Set reposition rejected, PX4Interface is not in a quad hover/orbit state (for VTOLs, use /orbit_action)";
+            RCLCPP_ERROR(this->get_logger(), "%s", response->message.c_str());
+            response->success = false;
+            return;
+        }
+    } // Drop shared_lock for reads
     if (active_srv_or_act_flag_.exchange(true)) {
         response->message = "Another service/action is active";
         RCLCPP_ERROR(this->get_logger(), "%s", response->message.c_str());
         response->success = false;
         return;
     }
-    if (aircraft_fsm_state_ == PX4InterfaceState::MC_ORBIT) {
-        do_set_mode(4, 3); // If in an Orbit mode, switch to Hold mode
-        aircraft_fsm_state_ = PX4InterfaceState::MC_HOVER;
-    }
+    {
+        std::unique_lock<std::shared_mutex> lock(node_data_mutex_); // Use unique_lock for data writes
+        if (aircraft_fsm_state_ == PX4InterfaceState::MC_ORBIT) {
+            do_set_mode(4, 3); // If in an Orbit mode, switch to Hold mode
+            aircraft_fsm_state_ = PX4InterfaceState::MC_HOVER;
+        }
+    } // Drop unique_lock for writes
+
+    std::shared_lock<std::shared_mutex> lock(node_data_mutex_);  // Use shared_lock for data reads
     double desired_east = request->east;
     double desired_north = request->north;
     double desired_alt = request->altitude;

@@ -329,7 +329,7 @@ void ArdupilotInterface::set_reposition_callback(const std::shared_ptr<autopilot
             response->success = false;
             return;
         }
-    }
+    } // Drop shared_lock for reads
     if (active_srv_or_act_flag_.exchange(true)) {
         response->message = "Another service/action is active";
         RCLCPP_ERROR(this->get_logger(), "%s", response->message.c_str());
@@ -338,7 +338,11 @@ void ArdupilotInterface::set_reposition_callback(const std::shared_ptr<autopilot
     }
 
     // Change mode to GUIDED if in AUTO mode for a orbit
-    while (aircraft_fsm_state_ == ArdupilotInterfaceState::MC_ORBIT) { // TODO: lock variable read
+    auto is_orbiting = [this]() { // Use a lambda to lock the variable on read
+        std::shared_lock<std::shared_mutex> lock(node_data_mutex_);
+        return aircraft_fsm_state_ == ArdupilotInterfaceState::MC_ORBIT;
+    };
+    while (is_orbiting()) {
         auto set_mode_request = std::make_shared<SetMode::Request>();
         set_mode_request->custom_mode = "GUIDED";
         set_mode_client_->async_send_request(set_mode_request,
