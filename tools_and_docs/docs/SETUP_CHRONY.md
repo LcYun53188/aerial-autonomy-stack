@@ -1,6 +1,6 @@
 # Setup Chrony
 
-> Follow these steps to let the Jetson synchronize their time to the `ground-image` computer over `AIR_SUBNET` when without internet for Zenoh, etc.
+> Follow these steps to let the Jetson synchronize their time to the `ground-image` computer over `AIR_SUBNET` when without internet connectivity (for Zenoh, etc.)
 
 ## On the Ground Station Computer
 
@@ -56,6 +56,9 @@ On Jetson, check with:
 ```sh
 chronyc sources
 ```
-If `[AIR_SUBNET].90.101` has a `^*` next to it: the Jetson is syncing to the ground computer
 
-If an internet server has a `^*` next to it (and `[AIR_SUBNET].90.101` has a + or -): the Jetson is syncing to the internet and  sees the ground computer as backup
+If `[AIR_SUBNET].90.101` has a `^*` next to it, the Jetson is syncing to the ground computer
+
+If an internet server has a `^*` next to it, the Jetson is syncing to the internet
+
+If `[AIR_SUBNET].90.101` has a + or - next to it, the Jetson sees the ground computer as backup for timesync

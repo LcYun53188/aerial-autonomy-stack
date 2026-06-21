@@ -200,7 +200,7 @@ cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/offboard_action \
 >
 > Read [`SETUP_AVIONICS.md`](/tools_and_docs/docs/SETUP_AVIONICS.md) and [`BOM.md`](/tools_and_docs/docs/BOM.md) to setup the requirements on the Jetson and configure the Pixhawk
 >
-> Read [`SETUP_CHRONY.md`](/tools_and_docs/docs/SETUP_CHRONY.md) to let the Jetson synchronize to the `ground-image` computer when without internet
+> Read [`SETUP_CHRONY.md`](/tools_and_docs/docs/SETUP_CHRONY.md) to let the Jetson timesync to the `ground-image` computer when w/o internet
 
 ```sh
 sudo apt update && sudo apt install -y git
