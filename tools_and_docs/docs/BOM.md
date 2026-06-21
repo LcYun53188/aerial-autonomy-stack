@@ -117,7 +117,7 @@ TODO
 
 ```sh
 # GPS module
-GPS1_TYPE           1               # Auto, if using the GPS2 port (SERIAL4) instead of GPS1 (SERIAL3), set SERIAL3_PROTOCOL (GPS1) to -1/None
+GPS1_TYPE           1               # Auto, here GPS1 refers to the primary GPS, not the 6X port; if connecting to the GPS2 port (SERIAL4) remember to set SERIAL3_PROTOCOL (GPS1 port) to -1/None
 
 # DShot ESCs (Tekko32 F4 45A)
 SERVOx_FUNCTION     0               # Disabled, for SERVO1 to 4, these are channels 1 to 4 on IO PWM
