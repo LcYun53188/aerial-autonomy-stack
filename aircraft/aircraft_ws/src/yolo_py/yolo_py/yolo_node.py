@@ -39,6 +39,7 @@ class YoloInferenceNode(Node):
         self.cx = None
         self.cy = None
         self.architecture = platform.machine()
+        self.is_jetson = (self.architecture == 'aarch64')
         
         if self.run_inference:
             # Load classes
@@ -273,7 +274,7 @@ class YoloInferenceNode(Node):
 
             # Only on Jetson, stream to the ground station via UDP using GStreamer
             # On ports 5001, 5002, ..., and 5101, 5102, ..., based on DRONE_ID and self.camera_id
-            if self.remote_video_streams and (self.architecture == 'aarch64'):
+            if self.remote_video_streams and self.is_jetson: # Use cached boolean flag in loops
                 if not hasattr(self, 'gnd_stream_writer'):
                     h, w = frame.shape[:2]
                     gnd_ip = os.getenv('AIR_SUBNET', '10.22') + '.90.' + os.getenv('GROUND_ID', '101')
@@ -282,15 +283,18 @@ class YoloInferenceNode(Node):
                         "appsrc do-timestamp=true ! video/x-raw, format=BGR ! queue max-size-buffers=2 leaky=downstream ! "
                         "videoconvert ! videorate drop-only=true ! "
                         "video/x-raw, format=BGRx, max-framerate=10/1 ! nvvidconv ! "
-                        "nvv4l2h265enc maxperf-enable=1 preset-level=1 insert-sps-pps=true idrinterval=30 ! "
+                        "nvv4l2h265enc maxperf-enable=1 preset-level=1 "
+                        "control-rate=0 bitrate=200000 peak-bitrate=300000 " # Variable bitrate for ~0.1bppf (Bits per Pixel per Frame) on a 640x360 frame, or use "control-rate=1 bitrate=250000 " for constant bitrate
+                        "insert-sps-pps=true idrinterval=10 ! "
                         f"h265parse ! rtph265pay pt=96 config-interval=1 mtu=1400 ! udpsink host={gnd_ip} port={port} sync=false async=false"
                     )
                     # Cap the framerate to 10FPS and use h265 to reduce bandwidith
-                    # Optionally, add "control-rate=2 bitrate=2000000 peak-bitrate=3000000" after nvv4l2h265enc to cap (variable) bitrate
                     # Optionally, re-scale the frames "nvvidconv ! video/x-raw, width=640, height=480 ! "
                     self.gnd_stream_writer = cv2.VideoWriter(gst_out, cv2.CAP_GSTREAMER, 0, 60.0, (w, h)) # Framerate upper limit of 60FPS
                     self.get_logger().info(f"Started UDP stream to {gnd_ip}:{port}")
                 if self.gnd_stream_writer.isOpened():
+                    ros_time_sec = self.get_clock().now().nanoseconds / 1e9
+                    cv2.putText(frame, f"ROS T: {ros_time_sec:.3f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 1) # Timestamp frames
                     self.gnd_stream_writer.write(frame)
 
         # Cleanup
@@ -321,6 +325,8 @@ class YoloInferenceNode(Node):
             if not ret:
                 time.sleep(0.01) # Avoid busy loop if no frame is received
                 continue
+            if self.is_jetson: # Use cached boolean flag in loops
+                frame = frame.copy() # On Jetson, avoid GStreamer and inference memory conflicts (at small CPU cost)
             try:
                 if frame_queue.full():
                     try:
