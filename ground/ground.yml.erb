@@ -108,6 +108,6 @@ windows:
         <% (1..(num_quads + num_vtols)).each do |drone_id| %>
         - |
           echo -e "\n\n Attach the AAS container with:\n\n\tdocker exec -it aircraft-container_<%= drone_id %> tmux attach\n\n"
-          ssh orin@<%= "#{air_subnet}.90.#{drone_id}" %>
+          ssh -o ConnectTimeout=5 -o ServerAliveInterval=3 -o ServerAliveCountMax=3 orin@<%= "#{air_subnet}.90.#{drone_id}" %>
         <% end %>
   <% end %>
