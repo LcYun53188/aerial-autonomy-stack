@@ -77,10 +77,10 @@ windows:
         <% case odom %>
         <% when 'openvins' %>
         - >
-          CONFIG_DIR=/aas/github_ws/install/ov_msckf/share/ov_msckf/config/euroc_mav && sed -i 's|/imu0|/imu_data|g' $CONFIG_DIR/kalibr_imu_chain.yaml &&
-          sed -i 's|/cam0/image_raw|/camera_frames_0|g; s|/cam1/image_raw|/camera_frames_1|g' $CONFIG_DIR/kalibr_imucam_chain.yaml &&
-          ros2 launch ov_msckf subscribe.launch.py <%= stereo_cam ? '' : 'use_stereo:=false max_cameras:=1' %> <%= simulated_time ? 'use_sim_time:=true' : '' %>
-        - ros2 run rqt_image_view rqt_image_view /ov_msckf/trackhist
+          CONFIG_NAME=euroc_mav && CONFIG_DIR=/aas/github_ws/install/ov_msckf/share/ov_msckf/config/$CONFIG_NAME &&
+          sed -i 's|/imu0|/imu_data|g' $CONFIG_DIR/kalibr_imu_chain.yaml && sed -i 's|/cam0/image_raw|/camera_frames_0|g; s|/cam1/image_raw|/camera_frames_1|g' $CONFIG_DIR/kalibr_imucam_chain.yaml &&
+          ros2 launch ov_msckf subscribe.launch.py config:=$CONFIG_NAME <%= headless ? '' : 'rviz_enable:=true' %>
+          <%= stereo_cam ? '' : 'use_stereo:=false max_cameras:=1' %> <%= simulated_time ? 'use_sim_time:=true' : '' %>
         <% when 'fastlio' %>
         - ros2 launch spark_fast_lio mapping_vbr_colosseo.launch.yaml
         - ros2 launch kiss_matcher_ros run_kiss_matcher_sam.launch.yaml
