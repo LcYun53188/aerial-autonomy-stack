@@ -192,7 +192,7 @@ cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/offboard_action \
 > To end the simulation, in each terminal detach Tmux with `Ctrl + b`, then `d`; kill all lingering processes with `tmux kill-server && pkill -f gz`
 > </details>
 
-![vio](https://github.com/user-attachments/assets/f8f65478-4be1-42ff-aeab-34e6c147b759)
+![vio](https://github.com/user-attachments/assets/b1a97041-a508-4365-8197-9bf6ba32bcc1)
 
 ## 3. Deployment on Jetson
 
