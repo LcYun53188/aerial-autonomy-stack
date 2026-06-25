@@ -192,6 +192,8 @@ cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/offboard_action \
 > To end the simulation, in each terminal detach Tmux with `Ctrl + b`, then `d`; kill all lingering processes with `tmux kill-server && pkill -f gz`
 > </details>
 
+![vio](https://github.com/user-attachments/assets/f8f65478-4be1-42ff-aeab-34e6c147b759)
+
 ## 3. Deployment on Jetson
 
 > AAS is tested on a [Holybro Jetson Baseboard](https://holybro.com/products/pixhawk-jetson-baseboard) with Pixhawk 6X and NVIDIA Orin NX 16GB
@@ -526,10 +528,6 @@ External repositories:
 - [`microsoft/onnxruntime`](https://github.com/microsoft/onnxruntime) tag/branch: `v1.23.2`
 - [`Livox-SDK/Livox-SDK2`](https://github.com/Livox-SDK/Livox-SDK2) tag/branch: `master`
 - [`Livox-SDK/livox_ros_driver2`](https://github.com/Livox-SDK/livox_ros_driver2) tag/branch: `master`
-</details>
-
-<img width="2160" height="972" alt="Screenshot from 2026-06-24 23-48-58" src="https://github.com/user-attachments/assets/a2421d83-5618-4849-8376-df8a2ec0de32" />
-<img width="2398" height="1137" alt="Screenshot from 2026-06-24 23-52-10" src="https://github.com/user-attachments/assets/984ded03-2c7d-410f-aabb-a787faffeaf4" />
 
 ---
 > You've done a man's job, sir. I guess you're through, huh?
