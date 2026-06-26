@@ -552,6 +552,7 @@ docker exec -it aircraft-container-inst0_1 tmux attach
 - In ArdupilotInterface's action callbacks, std::shared_lock<std::shared_mutex> lock(node_data_mutex_); could be used on the reads of lat_, lon_, alt_
 - QGC does not save roll and pitch in the telemetry bar for PX4 VTOLs (MAV_TYPE 22)
 - PX4 quad max tilt is limited by the anti-windup gain (zero it to deactivate it): const float arw_gain = 2.f / _gain_vel_p(0);
+- On Jetson, if yolo_py crashes, run `sudo systemctl restart nvargus-daemon` on the host
 
 ## Docker Basics
 
