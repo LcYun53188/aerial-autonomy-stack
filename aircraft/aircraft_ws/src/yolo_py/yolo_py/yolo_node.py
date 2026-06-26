@@ -101,7 +101,7 @@ class YoloInferenceNode(Node):
                     "h264parse config-interval=-1 ! "
                     "nvv4l2decoder enable-max-performance=1 ! "     # Hardware Decoding: Uses the Orin's dedicated engine
                     "nvvidconv ! "         # NVMM-to-CPU Memory Conversion
-                    "video/x-raw, format=I420 ! "
+                    "video/x-raw, format=I420 ! " # If needed, add "queue max-size-buffers=2 leaky=downstream ! " to mitigate EGL crashes
                     "videoconvert ! "      # CPU Color Conversion: I420 to BGR
                     "video/x-raw, format=BGR ! "
                     "appsink drop=true max-buffers=1 sync=false "
@@ -126,6 +126,7 @@ class YoloInferenceNode(Node):
                     "nvdewarper config-file=/aas/aircraft_resources/patches/imx219_dewarper_config.txt ! "
                     "nvvidconv ! "
                     "video/x-raw, width=640, height=360, format=BGRx ! "
+                    "queue max-size-buffers=2 leaky=downstream ! " # Mitigate EGL crashes
                     "videoconvert ! video/x-raw, format=BGR ! "
                     "appsink drop=true max-buffers=1 sync=false"
                 ) # Test with: gst-launch-1.0 nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM), width=1280, height=720, framerate=60/1' ! nvvidconv ! nv3dsink -e
@@ -283,9 +284,9 @@ class YoloInferenceNode(Node):
                         "appsrc do-timestamp=true ! video/x-raw, format=BGR ! queue max-size-buffers=2 leaky=downstream ! "
                         "videoconvert ! videorate drop-only=true ! "
                         "video/x-raw, format=BGRx, max-framerate=10/1 ! nvvidconv ! "
-                        "nvv4l2h265enc maxperf-enable=1 preset-level=1 "
-                        "control-rate=0 bitrate=200000 peak-bitrate=300000 " # Variable bitrate for ~0.1bppf (Bits per Pixel per Frame) on a 640x360 frame, or use "control-rate=1 bitrate=250000 " for constant bitrate
-                        "insert-sps-pps=true idrinterval=10 ! "
+                        "nvv4l2h265enc maxperf-enable=1 preset-level=3 "
+                        "control-rate=0 bitrate=800000 peak-bitrate=1200000 " # Variable bitrate, or use "control-rate=1 bitrate=1000000 " for constant bitrate
+                        "insert-sps-pps=true idrinterval=20 ! "
                         f"h265parse ! rtph265pay pt=96 config-interval=1 mtu=1400 ! udpsink host={gnd_ip} port={port} sync=false async=false"
                     )
                     # Cap the framerate to 10FPS and use h265 to reduce bandwidith
