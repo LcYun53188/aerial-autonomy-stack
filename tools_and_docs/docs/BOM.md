@@ -160,17 +160,27 @@ INS_HNTCH_FREQ      40              # Base frequency, lower than the default 80 
 INS_HNTCH_BW        20              # Half of INS_HNTCH_FREQ
 # Check INS_HNTCH_OPTS is set to 0
 
+# Speed limits
+LOIT_SPEED          500             # 5m/s maximum horizontal speed in LOITER
+PILOT_SPEED_UP      250             # 2.5m/s climb rate in LOITER
+PILOT_SPEED_DN      150             # 1.5m/s descent rate in LOITER
+WPNAV_SPEED         500             # 5m/s maximum horizontal speed in AUTO/GUIDED
+WPNAV_SPEED_UP      250             # 2.5m/s climb rate in AUTO/GUIDED
+WPNAV_SPEED_DN      150             # 1.5m/s descent rate in AUTO/GUIDED
+RTL_SPEED           500             # 5m/s maximum horizontal speed in RTL
+ACRO_Y_RATE         120             # 120 deg/s maximum yaw rate
+
 # Failsafes
-FS_THR_ENABLE      0                # Disabled (the Boxer/R81 V2 combo does not send zero pulses)
-FS_GCS_ENABLE      1                # Commands an RTL if the QGC link is lost
-FS_GCS_TIMEOUT     5                # The timeout before the GCS failsafe engages
-FS_OPTIONS         0                # Never ignore the failsafes (not in AUTO/GUIDED, nor in pilot-controlled modes)
-BATT_LOW_VOLT      22.0             # Triggers the low failsafe at 3.6V per cell (Tattu G-Tech 6S 8000mAh 25C 22.2V)
-BATT_LOW_MAH       1600             # Triggers the low failsafe when 20% of 8000mAh (Tattu G-Tech 6S 8000mAh 25C 22.2V)
-BATT_FS_LOW_ACT    2                # Commands an RTL when either of the low thresholds is breached
-BATT_CRT_VOLT      21.0             # Triggers the critical failsafe at 3.5V per cell (Tattu G-Tech 6S 8000mAh 25C 22.2V)
-BATT_CRT_MAH       800              # Triggers the critical failsafe when 10% of 8000mAh (Tattu G-Tech 6S 8000mAh 25C 22.2V)
-BATT_FS_CRT_ACT    1                # Commands an immediate LAND when either of the low thresholds is breached
+FS_THR_ENABLE       0               # Disabled (the Boxer/R81 V2 combo does not send zero pulses)
+FS_GCS_ENABLE       1               # Commands an RTL if the QGC link is lost
+FS_GCS_TIMEOUT      5               # The timeout before the GCS failsafe engages
+FS_OPTIONS          0               # Never ignore the failsafes (not in AUTO/GUIDED, nor in pilot-controlled modes)
+BATT_LOW_VOLT       22.0            # Triggers the low failsafe at 3.6V per cell (Tattu G-Tech 6S 8000mAh 25C 22.2V)
+BATT_LOW_MAH        1600            # Triggers the low failsafe when 20% of 8000mAh (Tattu G-Tech 6S 8000mAh 25C 22.2V)
+BATT_FS_LOW_ACT     2               # Commands an RTL when either of the low thresholds is breached
+BATT_CRT_VOLT       21.0            # Triggers the critical failsafe at 3.5V per cell (Tattu G-Tech 6S 8000mAh 25C 22.2V)
+BATT_CRT_MAH        800             # Triggers the critical failsafe when 10% of 8000mAh (Tattu G-Tech 6S 8000mAh 25C 22.2V)
+BATT_FS_CRT_ACT     1               # Commands an immediate LAND when either of the low thresholds is breached
 
 # In QGC -> Vehicle Configuration -> Radio, calibrate the Radiomaster Boxer RC (revise FS_THR_VALUE, if necessary)
 # In QGC -> Vehicle Configuration -> Flight Modes, set one switch for Stabilized/AltHold/Loiter, one for RTL
