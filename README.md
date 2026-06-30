@@ -1,6 +1,6 @@
 # aerial-autonomy-stack
 
-*Aerial autonomy stack* (AAS) is a "batteries included" software and the simplest/fastest way to:
+*Aerial autonomy stack* (AAS) is a "batteries included" open software and the simplest/fastest way to:
 
 1. **Develop** multi-drone autonomy—with PX4, ArduPilot, and ROS2
 2. **Simulate** faster-than-real-time perception and control—with YOLO and 3D LiDAR
