@@ -101,15 +101,17 @@ flowchart TB
 [doot1]:https://www.mouser.ca/ProductDetail/Doodle-Labs/RM-2450-11N3?qs=ulEaXIWI0c91eCn7VRB%2FpA%3D%3D
 [doot2]:https://www.mouser.ca/ProductDetail/Doodle-Labs/EK-2450-11N3?qs=ulEaXIWI0c%2FLOqPeL4gNgg%3D%3D
 
-## Holybro X650 Parameters
+## Holybro X650 with 6X Autopilot Parameters
 
-Autopilot parameters for the Holybro X650 kit
+Non-default parameters for the Holybro X650 kit; for full `.params` files examples, check folder [`params/`](/tools_and_docs/docs/params/)
 
+<!--
 ### PX4 Configuration
 
 ```sh
-TODO
+TBD
 ```
+-->
 
 ### ArduPilot Configuration
 
@@ -195,5 +197,3 @@ BATT_FS_CRT_ACT     1               # Commands an immediate LAND when either of 
 # In QGC -> Vehicle Configuration -> Flight Safety, set RTL settings
 # In QGC -> Vehicle Configuration -> Sensors, calibrate accelerometer, level horizon, and compass (outdoors)
 ```
-
-For full `.params` files examples, check folder [`params/`](/tools_and_docs/docs/params/)
