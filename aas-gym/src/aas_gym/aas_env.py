@@ -60,7 +60,8 @@ class AASEnv(gym.Env):
         self.LIDAR = lidar
         self.ODOM = odom
         self.NUM_QUADS = num_quads
-        self.NUM_VTOLS = 0
+        self.NUM_VTOLS = 0 # TODO add support beyond multicopters
+        self.NUM_TAILS = 0 # TODO add support beyond multicopters
         self.WORLD = "impalpable_greyness"
         #
         self.SIM_SUBNET = "10.42"
@@ -182,6 +183,7 @@ class AASEnv(gym.Env):
                 "LIDAR": str(self.LIDAR).lower(),
                 "NUM_QUADS": str(self.NUM_QUADS),
                 "NUM_VTOLS": str(self.NUM_VTOLS),
+                "NUM_TAILS": str(self.NUM_TAILS),
                 "WORLD": self.WORLD,
                 "SIMULATED_TIME": "true",
                 "RTF": str(self.RTF),
@@ -209,12 +211,16 @@ class AASEnv(gym.Env):
         # )
         # self.simulation_container.start()
         #
+        self.drone_types = (
+            ["quad"] * self.NUM_QUADS +
+            ["vtol"] * self.NUM_VTOLS +
+            ["tail"] * self.NUM_TAILS
+        )
         self.aircraft_containers = []
-        for i in range(1, self.NUM_QUADS + self.NUM_VTOLS + 1):            
-            air_cont_name = f"aircraft-container-inst{self.INSTANCE}_{i}"
+        for drone_id, drone_type in enumerate(self.drone_types, start=1):
+            air_cont_name = f"aircraft-container-inst{self.INSTANCE}_{drone_id}"
             force_container_cleanup(air_cont_name)
             print(f"Creating Aircraft Container {air_cont_name}...")
-            drone_type = "quad" if i <= self.NUM_QUADS else "vtol"
             air_cont = self.client.containers.create(
                 "aircraft-image:latest",
                 name=air_cont_name,
@@ -239,26 +245,26 @@ class AASEnv(gym.Env):
                     "LIDAR": str(self.LIDAR).lower(),
                     "ODOM": self.ODOM,
                     "DRONE_TYPE": drone_type,
-                    "DRONE_ID": str(i),
+                    "DRONE_ID": str(drone_id),
                     "SIMULATED_TIME": "true",
                     "SIM_SUBNET": self.SIM_SUBNET,
                     # "AIR_SUBNET": self.AIR_SUBNET,
                     "SIM_ID": self.SIM_ID,
                     # "GROUND_ID": self.GROUND_ID,
                     "GND_CONTAINER": str(self.GND_CONTAINER).lower(),
-                    "ROS_DOMAIN_ID": str(i),
+                    "ROS_DOMAIN_ID": str(drone_id),
                     "GYMNASIUM" : "true",
                 }
             )
             print(f"Connecting {air_cont_name} to {self.SIM_NET_NAME}...")
             self.networks[self.SIM_NET_NAME].connect(
                 air_cont,
-                ipv4_address=f"{self.SIM_SUBNET}.90.{i}"
+                ipv4_address=f"{self.SIM_SUBNET}.90.{drone_id}"
             )
             # print(f"Connecting {air_cont_name} to {self.AIR_NET_NAME}...")
             # self.networks[self.AIR_NET_NAME].connect(
             #     air_cont,
-            #     ipv4_address=f"{self.AIR_SUBNET}.90.{i}"
+            #     ipv4_address=f"{self.AIR_SUBNET}.90.{drone_id}"
             # )
             # air_cont.start()
             self.aircraft_containers.append(air_cont)

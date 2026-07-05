@@ -1,6 +1,8 @@
 require 'yaml'
 require 'erb'
 
+# This script automatically generates the SDF files for all vehicles based on the content of sensor_config.yaml
+
 # Helper method to render ERB templates and save the output
 def render_and_save(template_path, output_path, template_binding)
   if File.exist?(template_path)

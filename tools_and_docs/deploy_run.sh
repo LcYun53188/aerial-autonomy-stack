@@ -23,7 +23,7 @@ AIR_SUBNET="${AIR_SUBNET:-10.22}" # Inter-vehicle subnet (default = 10.22)
 SIM_ID="${SIM_ID:-100}" # Last byte of the simulation container IP (default = 100)
 GROUND_ID="${GROUND_ID:-101}" # Last byte of the simulation container IP (default = 101)
 #
-DRONE_TYPE="${DRONE_TYPE:-quad}" # Options: quad (default), vtol
+DRONE_TYPE="${DRONE_TYPE:-quad}" # Options: quad (default), vtol, tail
 DRONE_ID="${DRONE_ID:-1}" # Id of aircraft (default = 1)
 #
 DEV="${DEV:false}" # Options: true, false (default)
@@ -32,6 +32,7 @@ GND_CONTAINER="${GND_CONTAINER:-true}" # Options: true (default), false
 # Only used by ground-container
 NUM_QUADS="${NUM_QUADS:-1}" # Number of quadcopters (default = 1)
 NUM_VTOLS="${NUM_VTOLS:-0}" # Number of VTOLs (default = 0)
+NUM_TAILS="${NUM_TAILS:-0}" # Number of tailsitters (default = 0)
 
 GROUND="${GROUND:-false}" # Options: true, false (default)
 if [[ "$GROUND" == "true" ]]; then
@@ -43,7 +44,7 @@ if [[ "$GROUND" == "true" ]]; then
     --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env DISPLAY=$DISPLAY --env QT_X11_NO_MITSHM=1 --env XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \
     --env HEADLESS=false \
-    --env NUM_QUADS=$NUM_QUADS --env NUM_VTOLS=$NUM_VTOLS \
+    --env NUM_QUADS=$NUM_QUADS --env NUM_VTOLS=$NUM_VTOLS --env NUM_TAILS=$NUM_TAILS \
     --env SIMULATED_TIME=$HITL \
     --env ROS_DOMAIN_ID=$GROUND_ID \
     --env AIR_SUBNET=$AIR_SUBNET \
