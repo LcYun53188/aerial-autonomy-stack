@@ -20,7 +20,7 @@ NUM_VTOLS="${NUM_VTOLS:-0}" # Number of VTOLs (default = 0)
 NUM_TAILS="${NUM_TAILS:-0}" # Number of tailsitters (default = 0)
 WORLD="${WORLD:-impalpable_greyness}" # Options: impalpable_greyness (default), apple_orchard, shibuya_crossing, swiss_town
 #
-DEV="${DEV:false}" # Options: true, false (default)
+DEV="${DEV:-false}" # Options: true, false (default)
 HITL="${HITL:-false}" # Options: true, false (default)
 GND_CONTAINER="${GND_CONTAINER:-true}" # Options: true (default), false
 RTF="${RTF:-1.0}" # Real-time factor (default = 1.0), set to <=0.0 for as fast as possible execution
@@ -44,7 +44,7 @@ if echo "$XDG_CURRENT_DESKTOP" | grep -qi "gnome"; then
 elif grep -qEi "(Microsoft|WSL)" /proc/version &> /dev/null; then
   DESK_ENV="wsl"
 else
-  echo "Unsupported environment" 
+  echo "Untested (non-GNOME, non-WSL) desktop environment, exiting."
   exit 1
 fi
 echo "Desktop environment: $DESK_ENV"
@@ -228,21 +228,16 @@ read -n 1 -s # Wait for user input
 
 # Cleanup function
 cleanup() {
-  DOCKER_PIDS=$(pgrep -f "docker run.*inst${INSTANCE}" 2>/dev/null || true)
+  DOCKER_PIDS=$(pgrep -f "docker run.*inst${INSTANCE}([^0-9]|$)" 2>/dev/null || true)
   CONTAINER_NAMES=("${SIM_CONT_NAME}" "${GND_CONT_NAME}" "aircraft-container-inst${INSTANCE}")
   echo "Stopping Docker containers (this will take a few seconds)..."
   for name in "${CONTAINER_NAMES[@]}"; do
-      CIDS=$(docker ps -a -q --filter name="${name}" 2>/dev/null || true)
+      CIDS=$(docker ps -a -q --filter name="^${name}(_.*)?$" 2>/dev/null || true)
       for CID in $CIDS; do
         if [ -n "$CID" ]; then
           CNT_NAME=$(docker inspect --format="{{.Name}}" "$CID" | sed 's/^\///')
           echo "Removing $CNT_NAME..."
-          docker stop -t 1 $CID >/dev/null 2>&1 || true
-          if [[ "$CNT_NAME" == "$SIM_CONT_NAME" ]]; then
-            docker stop -t 2 $CID >/dev/null 2>&1 || true # Longer timeout for the container with Gazebo to avoid NVIDIA driver panic
-          else
-            docker stop -t 1 $CID >/dev/null 2>&1 || true
-          fi
+          docker stop -t 1 $CID >/dev/null 2>&1 || true # If needed, increase timeout -t to avoid NVIDIA driver panic
           docker rm $CID >/dev/null 2>&1 || true
         fi
       done

@@ -27,6 +27,29 @@ PX4Interface::PX4Interface() : Node("px4_interface"),
     velocity_.fill(NAN);
     angular_velocity_.fill(NAN);
 
+    // Parameters - Action Handle Accepted (Landing, Offboard, Orbit, Takeoff)
+    ACTION_LOOP_RATE_HZ = this->declare_parameter<int>("action_loop_rate_hz", 100); // Frequency of the while loops in long duration action handles for takeoff, landing, orbit, and offboard
+    // Parameters - Landing
+    LAND_INIT_DIST_THRESH = this->declare_parameter<double>("land_init_dist_thresh", 3.0); // Distance (m) from home, for a multicopter or VTOL, to start the final landing descent
+    VTOL_LAND_LOITER_DIST = this->declare_parameter<double>("vtol_land_loiter_dist", 300.0); // Distance (m) from home, for a VTOL, of the pre-landing loiter descent
+    VTOL_LAND_LOITER_RADIUS = this->declare_parameter<double>("vtol_land_loiter_radius", 150.0); // Radius (m), for a VTOL, of the pre-landing loiter descent
+    VTOL_LAND_LOITER_ALT_HIGH = this->declare_parameter<double>("vtol_land_loiter_alt_high", 150.0); // Initial altitude (m), for a VTOL, of the pre-landing loiter descent
+    VTOL_LAND_LOITER_ALT_LOW = this->declare_parameter<double>("vtol_land_loiter_alt_low", 65.0); // Final altitude (m), for a VTOL, of the pre-landing loiter descent
+    VTOL_LAND_LOITER_STARTED_DIST_THRESH = this->declare_parameter<double>("vtol_land_loiter_started_dist_thresh", 50.0); // Threshold (m) in X-Y to consider the pre-landing loiter descent started
+    VTOL_LAND_LOITER_EXIT_DIST_THRESH = this->declare_parameter<double>("vtol_land_loiter_exit_dist_thresh", 30.0); // Threshold (m) in X-Y to exit the pre-landing loiter descent
+    VTOL_LAND_LOITER_EXIT_ALT_THRESH = this->declare_parameter<double>("vtol_land_loiter_exit_alt_thresh", 10.0); // Threshold (m) in Z to exit the pre-landing loiter descent
+    VTOL_LAND_FAKE_REPOSITION_DISTANCE = this->declare_parameter<double>("vtol_land_fake_reposition_distance", 600.0); // Reposition point (m) behind home, must be greater than NAV_LOITER_RAD (e.g. 500m). NOTE: it will not be reached because the VTOL will transition and land at home
+    VTOL_LAND_TRANSITION_START_DISTANCE = this->declare_parameter<double>("vtol_land_transition_start_distance", 120.0); // Distance (m) from home to start the transition, affected by the platforms's cruise speed, mass, wind
+    TAIL_LAND_TRANSITION_START_DISTANCE = this->declare_parameter<double>("tail_land_transition_start_distance", 60.0); // Distance (m) from home to start the transition, affected by the platforms's cruise speed, mass, wind
+    // Parameters - Orbit
+    MC_ORBIT_SPEED_MS = this->declare_parameter<double>("mc_orbit_speed_ms", 5.0); // Tangential speed (m/s) of the orbit for quads
+    // Parameters - Takeoff
+    MC_TAKEOFF_COMPLETED_RATIO = this->declare_parameter<double>("mc_takeoff_completed_ratio", 0.9); // Percentage of the target altitude, for a multicopter, to consider the takeoff action complete
+    VTOL_TAKEOFF_TRANSITION_WAIT_SEC = this->declare_parameter<double>("vtol_takeoff_transition_wait_sec", 10.0); // Time in seconds to wait after the transition before sending the VTOL takeoff loiter
+    VTOL_TAKEOFF_LOITER_RADIUS = this->declare_parameter<double>("vtol_takeoff_loiter_radius", 200.0); // Radius (m), for a VTOL, of the post-takeoff loiter
+    // Parameters - Abort Action Handle (Landing, Offboard, Orbit, Takeoff)
+    ABORT_REPOSITION_ALT = this->declare_parameter<double>("abort_reposition_alt", 100.0); // Altitude (m) of the hover/loiter triggered when aborting an action
+
     // PX4 publishers
     rclcpp::QoS qos_profile_pub(10);  // Depth of 10
     qos_profile_pub.durability(rclcpp::DurabilityPolicy::TransientLocal);  // Or rclcpp::DurabilityPolicy::Volatile
@@ -36,7 +59,8 @@ PX4Interface::PX4Interface() : Node("px4_interface"),
     offboard_flag_pub_ = this->create_publisher<autopilot_interface_msgs::msg::OffboardFlag>("/offboard_flag", qos_profile_pub);
 
     // Create callback groups (Reentrant or MutuallyExclusive)
-    callback_group_timer_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Timed callbacks in parallel
+    callback_group_printout_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // Strictly sequential callbacks
+    callback_group_offboard_control_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // Strictly sequential callbacks
     callback_group_subscriber_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Listen to subscribers in parallel
     callback_group_service_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Services are parallel but refused if active_srv_or_act_flag_ is true
     callback_group_action_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Actions are parallel but refused if active_srv_or_act_flag_ is true
@@ -45,12 +69,12 @@ PX4Interface::PX4Interface() : Node("px4_interface"),
     px4_interface_printout_timer_ = this->create_wall_timer( // Follow wall clock for printouts
         3s, // Timer period of 3 seconds
         std::bind(&PX4Interface::px4_interface_printout_callback, this),
-        callback_group_timer_
+        callback_group_printout_
     );
     offboard_flag_timer_ = rclcpp::create_timer(this, this->get_clock(),
         std::chrono::nanoseconds(1000000000 / offboard_flag_frequency),
         std::bind(&PX4Interface::offboard_flag_callback, this),
-        callback_group_timer_
+        callback_group_offboard_control_
     );
 
     // Subscribers configuration
@@ -331,8 +355,8 @@ void PX4Interface::set_reposition_callback(const std::shared_ptr<autopilot_inter
     double desired_alt = request->altitude;
     RCLCPP_INFO(this->get_logger(), "New requested reposition East-North %.2f %.2f Alt. %.2f", desired_east, desired_north, desired_alt);
     auto [des_lat, des_lon] = lat_lon_from_cartesian(home_lat_, home_lon_, desired_east, desired_north);
-    double distance, heading;
-    geod.Inverse(lat_, lon_, des_lat, des_lon, distance, heading);
+    double distance, heading, azi2;
+    geod.Inverse(lat_, lon_, des_lat, des_lon, distance, heading, azi2);
     do_reposition(des_lat, des_lon, desired_alt, fmod(heading + 360.0, 360.0) / 180.0 * M_PI);
     response->success = true;
     response->message = "set_reposition request sent";
@@ -391,8 +415,8 @@ void PX4Interface::land_handle_accepted(const std::shared_ptr<rclcpp_action::Ser
                 aircraft_fsm_state_ = PX4InterfaceState::MC_HOVER;
             }
             if (aircraft_fsm_state_ == PX4InterfaceState::MC_HOVER) {
-                double distance, heading;
-                geod.Inverse(lat_, lon_, home_lat_, home_lon_, distance, heading);
+                double distance, heading, azi2;
+                geod.Inverse(lat_, lon_, home_lat_, home_lon_, distance, heading, azi2);
                 do_reposition(home_lat_, home_lon_, landing_altitude, fmod(heading + 360.0, 360.0) / 180.0 * M_PI);
                 aircraft_fsm_state_ = PX4InterfaceState::RTL;
                 feedback->message = "Returning home in MC mode";
@@ -654,7 +678,7 @@ void PX4Interface::takeoff_handle_accepted(const std::shared_ptr<rclcpp_action::
 
     double takeoff_altitude = goal->takeoff_altitude;
     double vtol_transition_heading = goal->vtol_transition_heading;
-    double vtol_loiter_nord = goal->vtol_loiter_nord;
+    double vtol_loiter_north = goal->vtol_loiter_north;
     double vtol_loiter_east = goal->vtol_loiter_east;
     double vtol_loiter_alt = goal->vtol_loiter_alt;
 
@@ -705,7 +729,7 @@ void PX4Interface::takeoff_handle_accepted(const std::shared_ptr<rclcpp_action::
                 }
             } else if (aircraft_fsm_state_ == PX4InterfaceState::VTOL_TAKEOFF_TRANSITION &&
                 (current_time_us > (time_of_vtol_transition_us_ + VTOL_TAKEOFF_TRANSITION_WAIT_SEC * 1000000))) {
-                auto [des_lat, des_lon] = lat_lon_from_cartesian(home_lat_, home_lon_, vtol_loiter_east, vtol_loiter_nord);
+                auto [des_lat, des_lon] = lat_lon_from_cartesian(home_lat_, home_lon_, vtol_loiter_east, vtol_loiter_north);
                 do_orbit(des_lat, des_lon, vtol_loiter_alt, VTOL_TAKEOFF_LOITER_RADIUS, NAN);
                 aircraft_fsm_state_ = PX4InterfaceState::FW_CRUISE;
                 taking_off = false;

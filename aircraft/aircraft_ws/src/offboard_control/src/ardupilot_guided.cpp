@@ -46,19 +46,20 @@ ArdupilotGuided::ArdupilotGuided() : Node("ardupilot_guided"),
     setpoint_raw_att_pub_ = this->create_publisher<AttitudeTarget>("/mavros/setpoint_raw/attitude", qos_profile_pub);
 
     // Create callback groups (Reentrant or MutuallyExclusive)
-    callback_group_timer_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Timed callbacks in parallel
+    callback_group_printout_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // Strictly sequential callbacks
+    callback_group_offboard_control_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // Strictly sequential callbacks
     callback_group_subscriber_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Listen to subscribers in parallel
 
     // Timers
     ardupilot_interface_printout_timer_ = this->create_wall_timer( // Follow wall clock for printouts
         3s, // Timer period of 3 seconds
         std::bind(&ArdupilotGuided::ardupilot_interface_printout_callback, this),
-        callback_group_timer_
+        callback_group_printout_
     );
     offboard_control_loop_timer_ = rclcpp::create_timer(this, this->get_clock(),
         std::chrono::nanoseconds(1000000000 / offboard_loop_frequency),
         std::bind(&ArdupilotGuided::offboard_loop_callback, this),
-        callback_group_timer_
+        callback_group_offboard_control_
     );
 
     // Subscribers configuration
@@ -88,7 +89,7 @@ ArdupilotGuided::ArdupilotGuided() : Node("ardupilot_guided"),
     // Offboard flag subscriber
     offboard_flag_sub_ = this->create_subscription<autopilot_interface_msgs::msg::OffboardFlag>(
         "/offboard_flag", qos_profile_sub, // 10Hz
-        std::bind(&ArdupilotGuided::offboard_flag_callaback, this, std::placeholders::_1), subscriber_options);
+        std::bind(&ArdupilotGuided::offboard_flag_callback, this, std::placeholders::_1), subscriber_options);
 
     // Perception subscribers
     ground_tracks_sub_ = this->create_subscription<ground_system_msgs::msg::SwarmObs>(
@@ -164,7 +165,7 @@ void ArdupilotGuided::vfr_hud_callback(const VfrHud::SharedPtr msg)
     heading_ = msg->heading; // degrees 0..360, also in /mavros/global_position/compass_hdg
     true_airspeed_m_s_ = msg->airspeed; // m/s
 }
-void ArdupilotGuided::offboard_flag_callaback(const autopilot_interface_msgs::msg::OffboardFlag::SharedPtr msg)
+void ArdupilotGuided::offboard_flag_callback(const autopilot_interface_msgs::msg::OffboardFlag::SharedPtr msg)
 {
     std::unique_lock<std::shared_mutex> lock(node_data_mutex_); // Use unique_lock for data writes
     offboard_active_ = msg->is_active;

@@ -344,6 +344,7 @@ class YoloInferenceNode(Node):
         h0, w0 = frame.shape[:2]
 
         img = cv2.dnn.blobFromImage(frame, 1/255.0, (self.input_size, self.input_size), swapRB=True, crop=False)
+        # Consider letterboxed preprocessing instead of `blobFromImage`'s stretch-resize if aspect-ratio distortion hurts detection
 
         with Profiler("ONNX Runtime Inference"):
             outputs = self.session.run(None, {self.input_name: img})

@@ -26,6 +26,31 @@ ArdupilotInterface::ArdupilotInterface() : Node("ardupilot_interface"),
     velocity_.fill(NAN);
     angular_velocity_.fill(NAN);
 
+    // Parameters - Reposition service
+    REPOSITION_REQ_DELAY_MS = this->declare_parameter<int>("reposition_req_delay_ms", 100); // Delay in ms between repeated change mode requests and repeated target pose publications
+    REPOSITION_PUB_RETRIES = this->declare_parameter<int>("reposition_pub_retries", 3); // Number of time the target pose is published
+    // Parameters - Action Handle Accepted (Landing, Offboard, Orbit, Takeoff)
+    ACTION_LOOP_RATE_HZ = this->declare_parameter<int>("action_loop_rate_hz", 100); // Frequency of the while loops in long duration action handles for takeoff, landing, orbit, and offboard
+    ACTION_REQ_DELAY_SEC = this->declare_parameter<double>("action_req_delay_sec", 1.0); // Delay between successive service requests in long duration action handles
+    // Parameters - Landing
+    MC_LAND_INIT_DIST_THRESH = this->declare_parameter<double>("mc_land_init_dist_thresh", 5.0); // Distance (m) from home, for a multicopter, to start the final landing descent
+    VTOL_LAND_LOITER_DIST = this->declare_parameter<double>("vtol_land_loiter_dist", 300.0); // Distance (m) from home, for a VTOL, of the pre-landing loiter descent
+    VTOL_LAND_LOITER_RADIUS = this->declare_parameter<double>("vtol_land_loiter_radius", 150.0); // Radius (m), for a VTOL, of the pre-landing loiter descent
+    VTOL_LAND_LOITER_ALT = this->declare_parameter<double>("vtol_land_loiter_alt", 150.0); // Initial altitude (m), for a VTOL, of the pre-landing loiter descent
+    VTOL_LAND_LOITER_EXIT_DIST_THRESH = this->declare_parameter<double>("vtol_land_loiter_exit_dist_thresh", 30.0); // Threshold (m) in X-Y to exit the pre-landing loiter descent
+    VTOL_LAND_LOITER_EXIT_ALT_THRESH = this->declare_parameter<double>("vtol_land_loiter_exit_alt_thresh", 10.0); // Threshold (m) in Z to exit the pre-landing loiter descent
+    VTOL_LAND_LOITER_EXIT_HEADING_THRESH = this->declare_parameter<double>("vtol_land_loiter_exit_heading_thresh", 10.0); // Threshold (deg) in desired approach heading to exit the pre-landing loiter descent
+    LAND_COMPLETED_ALT_THRESH = this->declare_parameter<double>("land_completed_alt_thresh", 2.0); // Altitude (m) from home, for a multicopter or VTOL, to consider the landing action complete
+    // Parameters - Orbit
+    ORBIT_MIN_POINTS = this->declare_parameter<int>("orbit_min_points", 8); // Minimum number of points in a orbit
+    ORBIT_POINT_SPACING = this->declare_parameter<double>("orbit_point_spacing", 15.0); // Target spacing (m) between points in a orbit
+    // Quad tangential speed is determinted by WPNAV_SPEED 500 (in cm/s) in iris_with_ardupilot/ardupilot-4.6.params
+    // Parameters - Takeoff
+    MC_TAKEOFF_COMPLETED_RATIO = this->declare_parameter<double>("mc_takeoff_completed_ratio", 0.9); // Percentage of the target altitude, for a multicopter, to consider the takeoff action complete
+    VTOL_TAKEOFF_ALT_THRESH = this->declare_parameter<double>("vtol_takeoff_alt_thresh", 2.0); // Altitude (m) to switch to state VTOL_TAKEOFF_HEADING (Unused)
+    VTOL_TAKEOFF_TRANSITION_WAIT_SEC = this->declare_parameter<double>("vtol_takeoff_transition_wait_sec", 10.0); // Time in seconds to wait in CRUISE mode before sending the VTOL takeoff loiter mission
+    VTOL_TAKEOFF_LOITER_RADIUS = this->declare_parameter<double>("vtol_takeoff_loiter_radius", 200.0); // Radius (m), for a VTOL, of the post-takeoff loiter
+
     // MAVROS Publishers
     rclcpp::QoS qos_profile_pub(10);  // Depth of 10
     qos_profile_pub.durability(rclcpp::DurabilityPolicy::TransientLocal);  // Or rclcpp::DurabilityPolicy::Volatile
@@ -35,7 +60,8 @@ ArdupilotInterface::ArdupilotInterface() : Node("ardupilot_interface"),
     offboard_flag_pub_ = this->create_publisher<autopilot_interface_msgs::msg::OffboardFlag>("/offboard_flag", qos_profile_pub);
 
     // Create callback groups (Reentrant or MutuallyExclusive)
-    callback_group_timer_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Timed callbacks in parallel
+    callback_group_printout_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // Strictly sequential callbacks
+    callback_group_offboard_control_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // Strictly sequential callbacks
     callback_group_subscriber_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Listen to subscribers in parallel
     callback_group_service_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Services are parallel but refused if active_srv_or_act_flag_ is true
     callback_group_action_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Actions are parallel but refused if active_srv_or_act_flag_ is true
@@ -44,12 +70,12 @@ ArdupilotInterface::ArdupilotInterface() : Node("ardupilot_interface"),
     ardupilot_interface_printout_timer_ = this->create_wall_timer( // Follow wall clock for printouts
         3s, // Timer period of 3 seconds
         std::bind(&ArdupilotInterface::ardupilot_interface_printout_callback, this),
-        callback_group_timer_
+        callback_group_printout_
     );
     offboard_flag_timer_ = rclcpp::create_timer(this, this->get_clock(),
         std::chrono::nanoseconds(1000000000 / offboard_flag_frequency),
         std::bind(&ArdupilotInterface::offboard_flag_callback, this),
-        callback_group_timer_
+        callback_group_offboard_control_
     );
 
     // Subscribers configuration
@@ -364,8 +390,8 @@ void ArdupilotInterface::set_reposition_callback(const std::shared_ptr<autopilot
     double desired_alt = request->altitude;
     RCLCPP_INFO(this->get_logger(), "New requested reposition East-North %.2f %.2f Alt. %.2f", desired_east, desired_north, desired_alt);
     auto [des_lat, des_lon] = lat_lon_from_cartesian(home_lat_, home_lon_, desired_east, desired_north);
-    double distance, heading;
-    geod.Inverse(lat_, lon_, des_lat, des_lon, distance, heading);
+    double distance, heading, azi2;
+    geod.Inverse(lat_, lon_, des_lat, des_lon, distance, heading, azi2);
     double yaw_enu_deg = 90.0 - heading;
     if (yaw_enu_deg > 180.0) {
         yaw_enu_deg -= 360.0;
@@ -927,7 +953,7 @@ void ArdupilotInterface::takeoff_handle_accepted(const std::shared_ptr<rclcpp_ac
 
     double takeoff_altitude = goal->takeoff_altitude;
     // double vtol_transition_heading = goal->vtol_transition_heading; // Heading is handled by ArduPilot's Q_WVANE_ENABLE
-    double vtol_loiter_nord = goal->vtol_loiter_nord;
+    double vtol_loiter_north = goal->vtol_loiter_north;
     double vtol_loiter_east = goal->vtol_loiter_east;
     double vtol_loiter_alt = goal->vtol_loiter_alt;
 
@@ -1038,7 +1064,7 @@ void ArdupilotInterface::takeoff_handle_accepted(const std::shared_ptr<rclcpp_ac
                 wp1.z_alt = 0.0;
                 mission_request->waypoints.push_back(wp1);
                 mavros_msgs::msg::Waypoint wp2; // Create the second waypoint (loiter)
-                auto [des_lat, des_lon] = lat_lon_from_cartesian(home_lat_, home_lon_, vtol_loiter_east, vtol_loiter_nord);
+                auto [des_lat, des_lon] = lat_lon_from_cartesian(home_lat_, home_lon_, vtol_loiter_east, vtol_loiter_north);
                 wp2.frame = 3;
                 wp2.command = 17; // NAV_LOITER_UNLIM
                 wp2.is_current = false;

@@ -69,14 +69,14 @@ Start AAS:
 ```sh
 cd aerial-autonomy-stack/tools_and_docs/
 
-NUM_QUADS=1 NUM_VTOLS=1 WORLD=swiss_town RTF=3.0 ./sim_run.sh    # Start a simulation, check the script for more options (note: ArduPilot SITL checks take ~30s of simulated time before being ready to arm)
+NUM_QUADS=1 NUM_VTOLS=1 WORLD=swiss_town RTF=3 ./sim_run.sh    # Start a simulation, check the script for more options (note: ArduPilot SITL checks take ~30s of simulated time before being ready to arm)
 
 # Simulation options:
 #  AUTOPILOT=px4, ardupilot
 #  HEADLESS/CAMERA/LIDAR=true, false
 #  NUM_QUADS/NUM_VTOLS/NUM_TAILS=0, 1, ...
 #  WORLD=impalpable_greyness, apple_orchard, shibuya_crossing, swiss_town, waterworld
-#  RTF=1.0, 2.0, ... (real-time-factor, use 0.0 for "as fast as possible)
+#  RTF=1, 2, ... (real-time-factor, use 0 for "as fast as possible)
 #  INSTANCE=0, 1, ... (integer ID to run multiple parallel simulations)
 ```
 
@@ -123,7 +123,7 @@ cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/offboard_action \
 >
 > ```sh
 > # Takeoff action (quads and VTOLs/tailsitters)
-> cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/takeoff_action autopilot_interface_msgs/action/Takeoff '{takeoff_altitude: 40.0, vtol_transition_heading: 330.0, vtol_loiter_nord: 200.0, vtol_loiter_east: 100.0, vtol_loiter_alt: 120.0}'"
+> cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/takeoff_action autopilot_interface_msgs/action/Takeoff '{takeoff_altitude: 40.0, vtol_transition_heading: 330.0, vtol_loiter_north: 200.0, vtol_loiter_east: 100.0, vtol_loiter_alt: 120.0}'"
 >
 > # Land (at home) action (quads and VTOLs/tailsitters)
 > cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/land_action autopilot_interface_msgs/action/Land '{landing_altitude: 60.0, vtol_transition_heading: 60.0}'"

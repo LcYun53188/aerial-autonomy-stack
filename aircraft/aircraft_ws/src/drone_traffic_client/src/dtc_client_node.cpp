@@ -98,7 +98,7 @@ private:
             auto goal = autopilot_interface_msgs::action::Takeoff::Goal();
             goal.takeoff_altitude = target_alt_;
             goal.vtol_transition_heading = target_vtol_heading_;
-            goal.vtol_loiter_nord = target_vtol_loiter_n_;
+            goal.vtol_loiter_north = target_vtol_loiter_n_;
             goal.vtol_loiter_east = target_vtol_loiter_e_;
             goal.vtol_loiter_alt = target_vtol_loiter_alt_;
             auto opts = rclcpp_action::Client<autopilot_interface_msgs::action::Takeoff>::SendGoalOptions();

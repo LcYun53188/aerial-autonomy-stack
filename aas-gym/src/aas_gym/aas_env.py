@@ -304,7 +304,9 @@ class AASEnv(gym.Env):
             raise e
         # Establish ZeroMQ connection
         self.socket = self.zmq_context.socket(zmq.REQ)
-        self.socket.setsockopt(zmq.RCVTIMEO, 60 * 1000) # 1000 ms = 1 seconds, only a placeholder, will be changed during reset
+        self.socket.setsockopt(zmq.REQ_RELAXED, 1) # Allow sending a new request if the previous one timed out
+        self.socket.setsockopt(zmq.REQ_CORRELATE, 1) # Match replies to requests to avoid processing late replies
+        self.socket.setsockopt(zmq.RCVTIMEO, 60 * 1000) # 60s, only a placeholder, will be changed below
         if self.ZMQ_TRANSPORT == "tcp":
             self.socket.connect(f"tcp://{self.ZMQ_IP}:{self.ZMQ_PORT}")
             print(f"ZeroMQ socket connected to {self.ZMQ_IP}:{self.ZMQ_PORT}")
@@ -323,7 +325,6 @@ class AASEnv(gym.Env):
             action_payload = struct.pack('d', reset) # Serialize the action 
             self.socket.send(action_payload) # Send the REQ
             reply_bytes = self.socket.recv() # Wait for the REP (synchronous block) this call will block until a reply is received or it times out
-            self.socket.setsockopt(zmq.RCVTIMEO, 60 * 1000) # Restore standard timeout (60s) for stepping
             unpacked = struct.unpack('iI', reply_bytes) # Deserialize: i = int32 (sec), I = uint32 (nanosec)
             self.sim_sec, self.sim_nanosec = unpacked
             self.start_sim_sec = float(self.sim_sec) + (float(self.sim_nanosec) * 1e-9)
@@ -331,6 +332,8 @@ class AASEnv(gym.Env):
             print("ZMQ Error: Reply from container timed out.")
         except ValueError:
             print("ZMQ Error: Reply format error. Received garbage state.")
+        finally:
+            self.socket.setsockopt(zmq.RCVTIMEO, 60 * 1000) # Restore standard timeout (60s) for stepping
         ###########################################################################################
         ###########################################################################################
         ###########################################################################################

@@ -67,7 +67,8 @@ private:
     int own_id_;
 
     // Callback groups
-    rclcpp::CallbackGroup::SharedPtr callback_group_timer_;
+    rclcpp::CallbackGroup::SharedPtr callback_group_printout_;
+    rclcpp::CallbackGroup::SharedPtr callback_group_offboard_control_;
     rclcpp::CallbackGroup::SharedPtr callback_group_subscriber_;
 
     // Node timers
@@ -130,7 +131,7 @@ private:
     void status_callback(const VehicleStatus::SharedPtr msg);
 
     // Offboard flag call back
-    void offboard_flag_callaback(const autopilot_interface_msgs::msg::OffboardFlag::SharedPtr msg);
+    void offboard_flag_callback(const autopilot_interface_msgs::msg::OffboardFlag::SharedPtr msg);
 
     // Callbacks for perception subscribers
     void ground_tracks_callback(const ground_system_msgs::msg::SwarmObs::SharedPtr msg);
