@@ -32,12 +32,13 @@ def create_mission_tree(node_cfg, ros_node):
 
     # Is it a composite node (a sequence or fallback/selector branch)?
     node_type = node_cfg.get('type', 'Sequence')
+    memory = node_cfg.get('memory', True) # Default to True
     name = node_cfg.get('name', f"Unnamed_{node_type}")
     children_cfg = node_cfg.get('children', [])
     if node_type == 'Sequence': # AND logic (all must succeed)
-        composite = py_trees.composites.Sequence(name=name, memory=True)
+        composite = py_trees.composites.Sequence(name=name, memory=memory)
     elif node_type in ['Fallback', 'Selector']: # OR logic (try until one succeeds)
-        composite = py_trees.composites.Selector(name=name, memory=True)
+        composite = py_trees.composites.Selector(name=name, memory=memory)
     else:
         ros_node.get_logger().error(f"Unknown composite type: {node_type}")
         return py_trees.behaviours.Failure(name=f"Unknown_{node_type}")
