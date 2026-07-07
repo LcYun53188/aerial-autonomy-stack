@@ -37,7 +37,7 @@ public:
         repo_cli_ = this->create_client<autopilot_interface_msgs::srv::SetReposition>("/Drone" + drone_id_ + "/set_reposition");
         speed_cli_ = this->create_client<autopilot_interface_msgs::srv::SetSpeed>("/Drone" + drone_id_ + "/set_speed");
 
-        enforcer_timer_ = this->create_wall_timer(1s, std::bind(&DTCClient::enforcement_loop, this)); // 1Hz timer
+        enforcer_timer_ = rclcpp::create_timer(this, this->get_clock(), 1s, std::bind(&DTCClient::enforcement_loop, this)); // 1Hz timer
     }
 
 private:
