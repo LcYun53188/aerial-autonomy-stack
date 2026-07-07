@@ -14,6 +14,7 @@ GroundSystem::GroundSystem() : Node("ground_system"), keep_running_(true)
     this->declare_parameter("simulated_link_delay", 0.12); // s: mean one-way latency added to ros2 topic
     this->declare_parameter("simulated_link_jitter", 0.04); // s: +/- uniform jitter on the latency
     this->declare_parameter("simulated_link_loss", 0.02); // packet-loss probability [0,1]
+    this->declare_parameter("simulated_link_rate", 10.0); // Hz: max per-drone position rate over a real radio (see SRx_POSITION)
 
     // Get Parameters
     num_drones_ = this->get_parameter("num_drones").as_int();
@@ -41,8 +42,9 @@ GroundSystem::GroundSystem() : Node("ground_system"), keep_running_(true)
     simulated_link_delay_s_ = this->get_parameter("simulated_link_delay").as_double();
     simulated_link_jitter_s_ = this->get_parameter("simulated_link_jitter").as_double();
     simulated_link_loss_prob_ = this->get_parameter("simulated_link_loss").as_double();
+    simulated_link_rate_ = this->get_parameter("simulated_link_rate").as_double();
     if (simulate_link_degradation_) {
-        RCLCPP_WARN(this->get_logger(), "Simulated radio link ON: delay=%.0fms jitter=%.0fms loss=%.0f%%", simulated_link_delay_s_ * 1e3, simulated_link_jitter_s_ * 1e3, simulated_link_loss_prob_ * 1e2);
+        RCLCPP_WARN(this->get_logger(), "Simulated radio link (%.0fHz) ON: delay=%.0fms jitter=%.0fms loss=%.0f%%", simulated_link_rate_, simulated_link_delay_s_ * 1e3, simulated_link_jitter_s_ * 1e3, simulated_link_loss_prob_ * 1e2);
     }
 
     // Random Seed
@@ -145,16 +147,22 @@ void GroundSystem::mavlink_listener(int drone_id, int port, int thread_idx)
                         obs.vy = pos.vy / 100.0;
                         obs.vz = pos.vz / 100.0;
                         {
+                            std::lock_guard<std::mutex> lock(data_mutex_);
                             if (simulate_link_degradation_) {
+                                // Simulated message rate: drop messages that arrive faster
+                                if (simulated_link_rate_ > 0.0) {
+                                    const rclcpp::Time t = this->now();
+                                    auto it = last_sim_msg_.find(current_id);
+                                    if (it != last_sim_msg_.end() && (t - it->second).seconds() < 1.0 / simulated_link_rate_) continue;
+                                    last_sim_msg_[current_id] = t;
+                                }
                                 // Simulated message loss: skip observation
                                 if (simulated_link_loss_prob_ > 0.0 && simulated_link_unif(simulated_link_rng) < simulated_link_loss_prob_) continue;
                                 // Simulate latency and jitter: do not deliver now, schedule visibility for later
                                 const double jitter = simulated_link_jitter_s_ > 0.0 ? (simulated_link_unif(simulated_link_rng) * 2.0 - 1.0) * simulated_link_jitter_s_ : 0.0;
                                 const rclcpp::Time release = this->now() + rclcpp::Duration::from_seconds(std::max(0.0, simulated_link_delay_s_ + jitter));
-                                std::lock_guard<std::mutex> lock(data_mutex_);
                                 delayed_sim_obs_buf_[current_id].push_back({release, obs});
                             } else { // Real world deployment: deliver immediately
-                                std::lock_guard<std::mutex> lock(data_mutex_);
                                 drone_obs_[current_id] = obs;
                                 last_seen_[current_id] = this->now();
                             }
@@ -189,13 +197,14 @@ void GroundSystem::publish_swarm_obs()
     std::map<int, DroneData> current_obs;
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
-        // In simulation only, release buffered observations whose link latency has elapsed
-        for (auto &kv : delayed_sim_obs_buf_) {
-            auto &q = kv.second;
-            while (!q.empty() && q.front().release <= now) {
-                drone_obs_[kv.first] = q.front().data;
-                last_seen_[kv.first] = now;
-                q.pop_front();
+        if (simulate_link_degradation_) { // In simulation only, release buffered observations whose link latency has elapsed
+            for (auto &kv : delayed_sim_obs_buf_) {
+                auto &q = kv.second;
+                while (!q.empty() && q.front().release <= now) {
+                    drone_obs_[kv.first] = q.front().data;
+                    last_seen_[kv.first] = now;
+                    q.pop_front();
+                }
             }
         }
         // Drop stale tracks so a dead link disappears from /tracks instead of being republished forever as a frozen ghost

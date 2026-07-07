@@ -67,6 +67,8 @@ private:
     double simulated_link_delay_s_;
     double simulated_link_jitter_s_;
     double simulated_link_loss_prob_;
+    double simulated_link_rate_;
+    std::map<int, rclcpp::Time> last_sim_msg_;
     std::map<int, std::deque<DelayedSimObs>> delayed_sim_obs_buf_;
 
     // ROS Handles
