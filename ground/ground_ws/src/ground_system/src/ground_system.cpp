@@ -37,7 +37,7 @@ GroundSystem::GroundSystem() : Node("ground_system"), keep_running_(true)
             RCLCPP_WARN(this->get_logger(), "Missing hyphen in assignment: '%s'", pair_str.c_str());
         }
     }
-    simulate_link_degradation_ = this->get_parameter("use_sim_time").as_bool() && this->get_parameter("degrade_simulated_link").as_bool();;
+    simulate_link_degradation_ = this->get_parameter("use_sim_time").as_bool() && this->get_parameter("degrade_simulated_link").as_bool();
     simulated_link_delay_s_ = this->get_parameter("simulated_link_delay").as_double();
     simulated_link_jitter_s_ = this->get_parameter("simulated_link_jitter").as_double();
     simulated_link_loss_prob_ = this->get_parameter("simulated_link_loss").as_double();

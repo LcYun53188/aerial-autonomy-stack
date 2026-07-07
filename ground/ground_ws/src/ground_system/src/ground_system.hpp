@@ -62,7 +62,7 @@ private:
     // Random Number Generation
     std::default_random_engine rng_;
 
-    // Simulated radio-link model (active when use_sim_time is true)
+    // Simulated radio-link model active when use_sim_time and degrade_simulated_link (default: true) are both true
     bool simulate_link_degradation_;
     double simulated_link_delay_s_;
     double simulated_link_jitter_s_;
