@@ -13,7 +13,7 @@
 | 3   | Holybro Fixed Carbon Fiber GPS mount  | GNSS module support                                    | 12         | [URL][mount]
 | 4   | Holybro Microhard Telemetry Radio*    | Point-to-multipoint telemetry (1 ground + 1 per drone) | 449        | [URL][telem]
 | 5   | RadioMaster Boxer RC CC2500           | Radio controller                                       | 100        | [URL][rc]
-| 6   | RadioMaster R81 V2 Receiver           | Receiver for the radio controller                      | 18         | [URL][rec]
+| 6   | RadioMaster R86C V2 Receiver          | Receiver for the radio controller                      | 28         | [URL][rec]
 | 7   | Matek Power Module PM12S-4A           | 5V and 12V supply for Doodle and Jetson                | 20         | [URL][matek]
 | 8   | Tattu G-Tech 6S 8000mAh 25C 22.2V     | Lipo battery pack with XT60                            | 162        | [URL][batt]
 | 9   | Pixhawk Jetson Baseboard Bundle       | NVIDIA Orin NX 16GB + SSD + Pixhawk 6X + CSI ArduCam   | 1450       | [URL][jetson]
@@ -58,9 +58,9 @@ flowchart TB
     Lidar[Livox Mid-360S]
     Camera[CSI IMX219 ArduCam]
 
-    RC_Rx[R81 Receiver]
+    RC_Rx[R86C Receiver]
     RC[RadioMaster Boxer RC]
-    RC_Rx <-->|"bind"| RC
+    RC_Rx <-->|"bind <br/> FrSky X D16"| RC
 
     Batt -- "24V" --> PDB
     PDB -- "24V" --> Matek
@@ -93,7 +93,7 @@ flowchart TB
 [telem]:https://holybro.com/collections/telemetry-radios/products/microhard-radio?variant=42522025590973
 [telem2]:https://holybro.com/collections/telemetry-radios/products/sik-telemetry-radio-1w?variant=45094904856765
 [rc]:https://radiomasterrc.com/collections/boxer-radio/products/boxer-radio-controller-m2?variant=46486352298176
-[rec]:https://holybro.com/collections/rc-radio-transmitter-receiver/products/radiomaster-r81-receiver
+[rec]:https://holybro.com/products/radiomaster-r86c-receiver
 [matek]:https://www.mateksys.com/?portfolio=pm12s-4a
 [batt]:https://genstattu.com/tattu-8000mah-22-2v-25c-6s1p-lipo-battery-pack-with-xt60-plug.html
 [jetson]:https://holybro.com/collections/flight-controllers/products/pixhawk-jetson-baseboard?variant=44636223439037
@@ -183,7 +183,7 @@ COMPASS_ORIENT      6               # Yaw270, assuming the IST8310/6589xx is rec
 # In QGC -> Vehicle Configuration -> Sensors -> Sensor Settings, set the external compass as Priority 1 (COMPASS_PRIO1_ID) and the internal compass as Priority 2 (COMPASS_PRIO2_ID)
 
 # Failsafes
-FS_THR_ENABLE       0               # Disabled (the Boxer/R81 V2 combo does not send zero pulses)
+FS_THR_ENABLE       1               # Commands an RTL if the RC link is lost, requires configuring "Failsafe No pulses" on the Boxer RC using protocol FrSky X D16 with the R86C receiver
 FS_GCS_ENABLE       1               # Commands an RTL if the QGC link is lost
 FS_GCS_TIMEOUT      5               # The timeout before the GCS failsafe engages
 FS_OPTIONS          0               # Never ignore the failsafes (not in AUTO/GUIDED, nor in pilot-controlled modes)
@@ -193,6 +193,8 @@ BATT_FS_LOW_ACT     2               # Commands an RTL when either of the low thr
 BATT_CRT_VOLT       21.0            # Triggers the critical failsafe at 3.5V per cell (Tattu G-Tech 6S 8000mAh 25C 22.2V)
 BATT_CRT_MAH        800             # Triggers the critical failsafe when 10% of 8000mAh (Tattu G-Tech 6S 8000mAh 25C 22.2V)
 BATT_FS_CRT_ACT     1               # Commands an immediate LAND when either of the low thresholds is breached
+RSSI_TYPE           2               # Sets the Received Signal Strength Indicator (RSSI) source to an RC Channel PWM value
+RSSI_CHANNEL        16              # Tells the flight controller to read Channel 16 for the RSSI data (when using the FrSky X D16 protocol)
 
 # In QGC -> Vehicle Configuration -> Radio, calibrate the Radiomaster Boxer RC (revise FS_THR_VALUE, if necessary)
 # In QGC -> Vehicle Configuration -> Flight Modes, set one switch for Loiter/AltHold/Stabilized, one for RTL
