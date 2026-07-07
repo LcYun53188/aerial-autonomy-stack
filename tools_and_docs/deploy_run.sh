@@ -66,6 +66,7 @@ if [[ "$DEV" == "true" ]]; then
   DEV_OPTS+=" -v ${SCRIPT_DIR}/../aircraft/aircraft_resources/:/aas/aircraft_resources:cached"
   DEV_OPTS+=" -v ${SCRIPT_DIR}/../aircraft/aircraft_ws/src:/aas/aircraft_ws/src:cached"
   DEV_OPTS+=" -v ${SCRIPT_DIR}/../ground/ground_ws/src/ground_system_msgs:/aas/aircraft_ws/src/ground_system_msgs:cached"
+  DEV_OPTS+=" -v ~/Downloads/:/mounted_downloads_folder:cached"
 fi
 
 if [ "$HEADLESS" = "false" ]; then

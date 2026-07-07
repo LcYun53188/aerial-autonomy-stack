@@ -55,15 +55,18 @@ if [[ "$DEV" == "true" ]]; then
   #
   DEV_SIM_OPTS="--entrypoint /bin/bash"
   DEV_SIM_OPTS+=" -v ${SCRIPT_DIR}/../simulation/simulation_resources/:/aas/simulation_resources:cached"
+  DEV_SIM_OPTS+=" -v ~/Downloads/:/mounted_downloads_folder:cached"
   #
   DEV_GND_OPTS="--entrypoint /bin/bash"
   DEV_GND_OPTS+=" -v ${SCRIPT_DIR}/../ground/ground_resources/:/aas/ground_resources:cached"
   DEV_GND_OPTS+=" -v ${SCRIPT_DIR}/../ground/ground_ws/src:/aas/ground_ws/src:cached"
+  DEV_GND_OPTS+=" -v ~/Downloads/:/mounted_downloads_folder:cached"
   #
   DEV_AIR_OPTS="--entrypoint /bin/bash"
   DEV_AIR_OPTS+=" -v ${SCRIPT_DIR}/../aircraft/aircraft_resources/:/aas/aircraft_resources:cached"
   DEV_AIR_OPTS+=" -v ${SCRIPT_DIR}/../aircraft/aircraft_ws/src:/aas/aircraft_ws/src:cached"
   DEV_AIR_OPTS+=" -v ${SCRIPT_DIR}/../ground/ground_ws/src/ground_system_msgs:/aas/aircraft_ws/src/ground_system_msgs:cached"
+  DEV_AIR_OPTS+=" -v ~/Downloads/:/mounted_downloads_folder:cached"
 fi
 
 # Create docker networks for SITL
