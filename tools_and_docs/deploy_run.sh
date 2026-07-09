@@ -54,7 +54,7 @@ if [[ "$GROUND" == "true" ]]; then
     --net=host \
     --privileged \
     --name ground-container \
-    --volume ~/Downloads/:/mounted_downloads_folder \
+    --volume ~/Downloads/:/aas/mounted_downloads_folder \
     ground-image
   exit 0
 fi
@@ -63,10 +63,9 @@ fi
 if [[ "$DEV" == "true" ]]; then
   SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
   DEV_OPTS="--entrypoint /bin/bash"
-  DEV_OPTS+=" -v ${SCRIPT_DIR}/../aircraft/aircraft_resources/:/aas/aircraft_resources:cached"
   DEV_OPTS+=" -v ${SCRIPT_DIR}/../aircraft/aircraft_ws/src:/aas/aircraft_ws/src:cached"
   DEV_OPTS+=" -v ${SCRIPT_DIR}/../ground/ground_ws/src/ground_system_msgs:/aas/aircraft_ws/src/ground_system_msgs:cached"
-  DEV_OPTS+=" -v ~/Downloads/:/mounted_downloads_folder:cached"
+  DEV_OPTS+=" -v ~/Downloads/:/aas/mounted_downloads_folder:cached"
 fi
 
 if [ "$HEADLESS" = "false" ]; then
@@ -105,7 +104,7 @@ docker run $DOCKER_RUN_FLAGS \
   --net=host \
   --privileged \
   --name aircraft-container_$DRONE_ID \
-  --volume ~/Downloads/:/mounted_downloads_folder \
+  --volume ~/Downloads/:/aas/mounted_downloads_folder \
   ${DEV_OPTS} \
   ${AAS_SSH_OPTS} \
   aircraft-image
