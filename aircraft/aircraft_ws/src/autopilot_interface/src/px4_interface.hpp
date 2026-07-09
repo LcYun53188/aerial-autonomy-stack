@@ -204,6 +204,8 @@ private:
 
     // Utility
     std::string fsm_state_to_string(PX4InterfaceState state);
+    static uint64_t sec_to_us(double sec) { return static_cast<uint64_t>(sec * 1000000); }
+
 };
 
 #endif // AUTOPILOT_INTERFACE__PX4_INTERFACE_HPP_

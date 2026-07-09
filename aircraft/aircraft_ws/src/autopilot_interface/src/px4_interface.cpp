@@ -607,7 +607,7 @@ void PX4Interface::offboard_handle_accepted(const std::shared_ptr<rclcpp_action:
             feedback->message = "Starting offboard control at t=" + std::to_string(time_of_offboard_start_us) + " us";
             goal_handle->publish_feedback(feedback);
         }
-        if (current_time_us >= time_of_offboard_start_us + static_cast<uint64_t>(max_duration_sec * 1000000)) {
+        if (current_time_us >= time_of_offboard_start_us + sec_to_us(max_duration_sec)) {
             time_of_offboard_start_us = UNSET_TIME_US;
             offboarding = false;
             do_set_mode(4, 3); // Auto/Loiter (PX4_CUSTOM_MAIN_MODE 4/PX4_CUSTOM_SUB_MODE_AUTO 3)
@@ -815,7 +815,7 @@ void PX4Interface::takeoff_handle_accepted(const std::shared_ptr<rclcpp_action::
                     goal_handle->publish_feedback(feedback);
                 }
             } else if (current_fsm_state == PX4InterfaceState::VTOL_TAKEOFF_TRANSITION &&
-                (current_time_us > (time_of_vtol_transition_us + static_cast<uint64_t>(VTOL_TAKEOFF_TRANSITION_WAIT_SEC * 1000000)))) {
+                (current_time_us > (time_of_vtol_transition_us + sec_to_us(VTOL_TAKEOFF_TRANSITION_WAIT_SEC)))) {
                 auto [des_lat, des_lon] = lat_lon_from_cartesian(home_lat, home_lon, vtol_loiter_east, vtol_loiter_north);
                 do_orbit(des_lat, des_lon, vtol_loiter_alt, VTOL_TAKEOFF_LOITER_RADIUS, NAN, home_alt);
                 {
