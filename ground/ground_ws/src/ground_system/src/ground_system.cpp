@@ -175,8 +175,8 @@ void GroundSystem::mavlink_listener(int drone_id, int port, int thread_idx)
                 continue; // Just a timeout, continue loop to check keep_running_
             } else {
                 char errbuf[256];
-                const char *msg = strerror_r(errno, errbuf, sizeof(errbuf));
-                RCLCPP_WARN(this->get_logger(), "Recv failed for drone %d: %s", drone_id, msg);
+                const char *err_msg = strerror_r(errno, errbuf, sizeof(errbuf));
+                RCLCPP_WARN(this->get_logger(), "Recv failed for drone %d: %s", drone_id, err_msg);
             }
         }
     }
@@ -191,11 +191,10 @@ void GroundSystem::publish_swarm_obs()
     const double ALT_STD_DEV_M = 0.0; // 0.5;
     const double VEL_STD_DEV_MS = 0.0; // 0.1;
 
-    ground_system_msgs::msg::SwarmObs swarm_msg;
-    swarm_msg.header.stamp = this->now();
-
-    // Copy data to minimize lock duration
     const rclcpp::Time now = this->now();
+    ground_system_msgs::msg::SwarmObs swarm_msg;
+    swarm_msg.header.stamp = now;
+    // Copy data to minimize lock duration
     std::map<int, DroneData> current_obs;
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
