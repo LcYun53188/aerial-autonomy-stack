@@ -129,7 +129,7 @@ windows:
       panes:
         - >
           sleep <%= sitl_instance * 3.0 %> && mkdir -p /aas/ardu_sitl_<%= drone_id %> && cd /aas/ardu_sitl_<%= drone_id %> &&
-          /aas/github_apps/ardupilot/Tools/autotest/sim_vehicle.py 
+          /aas/github_apps/ardupilot/Tools/autotest/sim_vehicle.py
           <%= vehicle_config %> --model JSON
           -I <%= sitl_instance %> --sysid <%= drone_id %>
           --speedup <%= speedup %>
