@@ -128,7 +128,7 @@ cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/offboard_action \
 > # Takeoff action (quads and VTOLs/tailsitters)
 > cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/takeoff_action autopilot_interface_msgs/action/Takeoff '{takeoff_altitude: 40.0, vtol_transition_heading: 330.0, vtol_loiter_north: 200.0, vtol_loiter_east: 100.0, vtol_loiter_alt: 120.0}'"
 >
-> # Land (at home) action (quads and VTOLs/tailsitters)
+> # Land (at home) action (quads and VTOLs/tailsitters), note: on ArduPilot, overwrites RTL_ALT/Q_RTL_ALT
 > cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/land_action autopilot_interface_msgs/action/Land '{landing_altitude: 60.0, vtol_transition_heading: 60.0}'"
 >
 > # Orbit action (quads and VTOLs/tailsitters)
@@ -140,7 +140,7 @@ cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/offboard_action \
 > # Offboard action (Specify the flight behavior via `controller_name`, e.g., "traj-test" for PX4 or "vel-test" for ArduPilot)
 > cancellable_action "ros2 action send_goal /Drone${DRONE_ID}/offboard_action autopilot_interface_msgs/action/Offboard '{controller_name: traj-test, max_duration_sec: 5.0}'"
 >
-> # SetSpeed service (always limited by the autopilot params, for quads applies from the next command, not effective on ArduPilot VTOLs) 
+> # SetSpeed service (limited by the autopilot params, for quads applies from the next command, not effective on ArduPilot VTOLs)
 > ros2 service call /Drone${DRONE_ID}/set_speed autopilot_interface_msgs/srv/SetSpeed '{speed: 3.0}'
 >
 > # Gimbal status and position control (in radians)

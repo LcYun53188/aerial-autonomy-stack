@@ -488,6 +488,8 @@ void ArdupilotInterface::land_handle_accepted(const std::shared_ptr<rclcpp_actio
         }
         uint64_t current_time_us = this->get_clock()->now().nanoseconds() / 1000;  // Convert to microseconds
 
+        // WARNING: this action handle overwrites autopilot parameter RTL_ALT/Q_RTL_ALT thus having consequences across autopilot reboots
+
         if (mav_type == 2) { // Multicopter
             if (((current_fsm_state == ArdupilotInterfaceState::MC_HOVER) || (current_fsm_state == ArdupilotInterfaceState::MC_ORBIT))
                     && (current_time_us > (time_of_last_srv_req_us_ + sec_to_us(ACTION_REQ_DELAY_SEC)))) {
