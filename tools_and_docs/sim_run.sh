@@ -233,26 +233,24 @@ read -n 1 -s # Wait for user input
 # Cleanup function
 cleanup() {
   # Copy autopilot SITL logs to the host
-  if [[ "$PLOT" == "true" ]]; then
-    PLOT_DIR="${SCRIPT_DIR}/logs/postmortem_$(date +%Y-%m-%d_%H-%M-%S)"
-    NUM_DRONES=$((NUM_QUADS + NUM_VTOLS + NUM_TAILS))
-    echo "Copying the latest log of $NUM_DRONES drone(s) to $PLOT_DIR..."
-    mkdir -p "$PLOT_DIR" 2>/dev/null || echo "Could not create $PLOT_DIR"
-    for i in $(seq 1 $NUM_DRONES); do
-      if [ "$AUTOPILOT" == "ardupilot" ]; then
-        LOG_GLOB="/aas/ardu_sitl_${i}/logs/*.BIN" # sim_vehicle.py runs in /aas/ardu_sitl_${i}, see simulation.yml.erb
-      else
-        LOG_GLOB="/aas/github_apps/PX4-Autopilot/build/px4_sitl_default/rootfs/$((i - 1))/log/*/*.ulg" # px4 -i is 0-based
-      fi
-      LATEST_LOG=$(docker exec "$SIM_CONT_NAME" bash -c "ls -t $LOG_GLOB 2>/dev/null | head -n 1" || true)
-      if [ -n "$LATEST_LOG" ]; then
-        docker cp "${SIM_CONT_NAME}:${LATEST_LOG}" "${PLOT_DIR}/drone_${i}.${LATEST_LOG##*.}" >/dev/null 2>&1 \
-          && echo "Copied drone $i log: $(basename "$LATEST_LOG")" || echo "Could not copy the log of drone $i"
-      else
-        echo "No log found for drone $i"
-      fi
-    done
-  fi
+  PLOT_DIR="${SCRIPT_DIR}/logs/postmortem_$(date +%Y-%m-%d_%H-%M-%S)"
+  NUM_DRONES=$((NUM_QUADS + NUM_VTOLS + NUM_TAILS))
+  echo "Copying the latest log of $NUM_DRONES drone(s) to $PLOT_DIR..."
+  mkdir -p "$PLOT_DIR" 2>/dev/null || echo "Could not create $PLOT_DIR"
+  for i in $(seq 1 $NUM_DRONES); do
+    if [ "$AUTOPILOT" == "ardupilot" ]; then
+      LOG_GLOB="/aas/ardu_sitl_${i}/logs/*.BIN" # sim_vehicle.py runs in /aas/ardu_sitl_${i}, see simulation.yml.erb
+    else
+      LOG_GLOB="/aas/github_apps/PX4-Autopilot/build/px4_sitl_default/rootfs/$((i - 1))/log/*/*.ulg" # px4 -i is 0-based
+    fi
+    LATEST_LOG=$(docker exec "$SIM_CONT_NAME" bash -c "ls -t $LOG_GLOB 2>/dev/null | head -n 1" || true)
+    if [ -n "$LATEST_LOG" ]; then
+      docker cp "${SIM_CONT_NAME}:${LATEST_LOG}" "${PLOT_DIR}/drone_${i}.${LATEST_LOG##*.}" >/dev/null 2>&1 \
+        && echo "Copied drone $i log: $(basename "$LATEST_LOG")" || echo "Could not copy the log of drone $i"
+    else
+      echo "No log found for drone $i"
+    fi
+  done
   # Cleanup
   DOCKER_PIDS=$(pgrep -f "docker run.*inst${INSTANCE}([^0-9]|$)" 2>/dev/null || true)
   CONTAINER_NAMES=("${SIM_CONT_NAME}" "${GND_CONT_NAME}" "aircraft-container-inst${INSTANCE}")
