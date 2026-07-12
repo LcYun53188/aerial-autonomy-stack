@@ -39,8 +39,7 @@ ArdupilotGuided::ArdupilotGuided() : Node("ardupilot_guided"),
     kiss_q_.fill(NAN);
 
     // MAVROS Publishers
-    rclcpp::QoS qos_profile_pub(10);  // Depth of 10
-    qos_profile_pub.durability(rclcpp::DurabilityPolicy::TransientLocal);  // Or rclcpp::DurabilityPolicy::Volatile
+    rclcpp::QoS qos_profile_pub = rclcpp::SensorDataQoS(); // Match MAVROS setpoint subscribers (BEST_EFFORT + VOLATILE)
     setpoint_accel_pub_= this->create_publisher<Vector3Stamped>("/mavros/setpoint_accel/accel", qos_profile_pub);
     setpoint_vel_pub_= this->create_publisher<TwistStamped>("/mavros/setpoint_velocity/cmd_vel", qos_profile_pub);
     setpoint_raw_att_pub_ = this->create_publisher<AttitudeTarget>("/mavros/setpoint_raw/attitude", qos_profile_pub);
@@ -369,7 +368,7 @@ void ArdupilotGuided::att_ref_test()
     att_msg.orientation.x = -sy * sp;
     att_msg.orientation.y = cy * sp;
     att_msg.orientation.z = sy * cp;
-    att_msg.thrust = 0.5; // Normalized scalar between 0.0 (zero thrust) and 1.0 (max thrust)
+    att_msg.thrust = 0.5; // When the 3rd bit of GUID_OPTIONS is not set (e.g. GUID_OPTIONS 0) this is only a [0,1] climb-rate target
     // Ignore roll/pitch/yaw rates
     att_msg.type_mask = mavros_msgs::msg::AttitudeTarget::IGNORE_ROLL_RATE |
                         mavros_msgs::msg::AttitudeTarget::IGNORE_PITCH_RATE |
@@ -381,8 +380,8 @@ void ArdupilotGuided::vel_ref_test()
     auto vel_msg = geometry_msgs::msg::TwistStamped(); // https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Twist.html
     vel_msg.header.stamp = this->get_clock()->now();
     vel_msg.header.frame_id = "map"; // World frame, without automatic yaw alignment
-    vel_msg.twist.linear.x = 0.0; // m/s East
-    vel_msg.twist.linear.y = 5.0; // m/s North
+    vel_msg.twist.linear.x = 3.0; // m/s East
+    vel_msg.twist.linear.y = 3.0; // m/s North
     vel_msg.twist.linear.z = 0.0; // m/s Up
     // Computed yaw rate for alignment
     const double Kp_yaw = 1.5;
@@ -396,8 +395,8 @@ void ArdupilotGuided::acc_ref_test()
     auto accel_msg = geometry_msgs::msg::Vector3Stamped(); // https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Vector3.html
     accel_msg.header.stamp = this->get_clock()->now();
     accel_msg.header.frame_id = "map"; // World frame, with automatic yaw alignment
-    accel_msg.vector.x = 0.0; // m/s^2 East
-    accel_msg.vector.y = 1.5; // m/s^2 North
+    accel_msg.vector.x = 0.4; // m/s^2 East
+    accel_msg.vector.y = 0.4; // m/s^2 North
     accel_msg.vector.z = 0.0; // m/s^2 Up
     setpoint_accel_pub_->publish(accel_msg);
 }

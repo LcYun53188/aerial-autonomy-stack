@@ -29,6 +29,7 @@ ArdupilotInterface::ArdupilotInterface() : Node("ardupilot_interface"),
     // Parameters - Reposition service
     REPOSITION_REQ_DELAY_MS = static_cast<int>(this->declare_parameter<int>("reposition_req_delay_ms", 100)); // Delay in ms between repeated change mode requests and repeated target pose publications
     REPOSITION_PUB_RETRIES = static_cast<int>(this->declare_parameter<int>("reposition_pub_retries", 3)); // Number of time the target pose is published
+    REPOSITION_MODE_RETRIES = static_cast<int>(this->declare_parameter<int>("reposition_mode_retries", 10)); // Max AUTO->GUIDED switch attempts before failing the reposition
     // Parameters - Action Handle Accepted (Landing, Offboard, Orbit, Takeoff)
     ACTION_LOOP_RATE_HZ = static_cast<int>(this->declare_parameter<int>("action_loop_rate_hz", 100)); // Frequency of the while loops in long duration action handles for takeoff, landing, orbit, and offboard
     ACTION_REQ_DELAY_SEC = this->declare_parameter<double>("action_req_delay_sec", 1.0); // Delay between successive service requests in long duration action handles
@@ -42,9 +43,7 @@ ArdupilotInterface::ArdupilotInterface() : Node("ardupilot_interface"),
     VTOL_LAND_LOITER_EXIT_HEADING_THRESH = this->declare_parameter<double>("vtol_land_loiter_exit_heading_thresh", 10.0); // Threshold (deg) in desired approach heading to exit the pre-landing loiter descent
     LAND_COMPLETED_ALT_THRESH = this->declare_parameter<double>("land_completed_alt_thresh", 2.0); // Altitude (m) from home, for a multicopter or VTOL, to consider the landing action complete
     // Parameters - Orbit
-    ORBIT_MIN_POINTS = static_cast<int>(this->declare_parameter<int>("orbit_min_points", 8)); // Minimum number of points in a orbit
-    ORBIT_POINT_SPACING = this->declare_parameter<double>("orbit_point_spacing", 15.0); // Target spacing (m) between points in a orbit
-    // Quad tangential speed is determinted by WPNAV_SPEED 500 (in cm/s) in iris_with_ardupilot/ardupilot-4.6.params
+    MC_ORBIT_SPEED_MS = this->declare_parameter<double>("mc_orbit_speed_ms", 5.0); // Tangential speed (m/s) of the orbit for quads, converted to CIRCLE_RATE (deg/s) based on the target radius
     // Parameters - Takeoff
     MC_TAKEOFF_COMPLETED_RATIO = this->declare_parameter<double>("mc_takeoff_completed_ratio", 0.9); // Percentage of the target altitude, for a multicopter, to consider the takeoff action complete
     VTOL_TAKEOFF_ALT_THRESH = this->declare_parameter<double>("vtol_takeoff_alt_thresh", 2.0); // Altitude (m) to switch to state VTOL_TAKEOFF_HEADING (Unused)
@@ -368,7 +367,15 @@ void ArdupilotInterface::set_reposition_callback(const std::shared_ptr<autopilot
         std::shared_lock<std::shared_mutex> lock(node_data_mutex_);
         return aircraft_fsm_state_ == ArdupilotInterfaceState::MC_ORBIT;
     };
+    int mode_change_attempts = 0;
     while (is_orbiting()) {
+        if (mode_change_attempts++ >= REPOSITION_MODE_RETRIES) {
+            response->success = false;
+            response->message = "Set reposition failed: could not switch from AUTO to GUIDED";
+            RCLCPP_ERROR(this->get_logger(), "%s", response->message.c_str());
+            active_srv_or_act_flag_.store(false); // Release the flag
+            return;
+        }
         auto set_mode_request = std::make_shared<SetMode::Request>();
         set_mode_request->custom_mode = "GUIDED";
         set_mode_client_->async_send_request(set_mode_request,
@@ -493,6 +500,7 @@ void ArdupilotInterface::land_handle_accepted(const std::shared_ptr<rclcpp_actio
         if (mav_type == 2) { // Multicopter
             if (((current_fsm_state == ArdupilotInterfaceState::MC_HOVER) || (current_fsm_state == ArdupilotInterfaceState::MC_ORBIT))
                     && (current_time_us > (time_of_last_srv_req_us_ + sec_to_us(ACTION_REQ_DELAY_SEC)))) {
+                RCLCPP_WARN(this->get_logger(), "The Land action handle overwrites autopilot parameter RTL_ALT/Q_RTL_ALT thus having consequences across autopilot reboots");
                 auto set_param_request = std::make_shared<ParamSetV2::Request>();
                 set_param_request->param_id = "RTL_ALT"; // This is ineffective is the vehicle is already above this altitude
                 set_param_request->value.type = 2; // Integer
@@ -592,8 +600,10 @@ void ArdupilotInterface::land_handle_accepted(const std::shared_ptr<rclcpp_actio
             } else if ((current_fsm_state == ArdupilotInterfaceState::VTOL_LANDING_READY_FOR_QRTL) && (current_time_us > (time_of_last_srv_req_us_ + sec_to_us(ACTION_REQ_DELAY_SEC)))) {
                 double distance_from_exit_in_meters = NAN;
                 geod.Inverse(lat, lon, exit_lat, exit_lon, distance_from_exit_in_meters);
+                double heading_error = std::fmod(std::fmod(heading - vtol_transition_heading + 180.0, 360.0) + 360.0, 360.0) - 180.0; // wraps to [-180, 180)
                 if ((distance_from_exit_in_meters < VTOL_LAND_LOITER_EXIT_DIST_THRESH) && (std::abs(alt - (home_alt + landing_altitude)) < VTOL_LAND_LOITER_EXIT_ALT_THRESH)
-                        && (std::abs(heading - vtol_transition_heading) < VTOL_LAND_LOITER_EXIT_HEADING_THRESH)) { // Meet exit thresholds to start QRTL
+                        && (std::abs(heading_error) < VTOL_LAND_LOITER_EXIT_HEADING_THRESH)) { // Meet exit thresholds to start QRTL
+                    RCLCPP_WARN(this->get_logger(), "The Land action handle overwrites autopilot parameter RTL_ALT/Q_RTL_ALT thus having consequences across autopilot reboots");
                     auto set_param_request = std::make_shared<ParamSetV2::Request>();
                     set_param_request->param_id = "Q_RTL_ALT";
                     set_param_request->value.type = 2; // Integer
@@ -746,7 +756,7 @@ rclcpp_action::GoalResponse ArdupilotInterface::orbit_handle_goal(const rclcpp_a
     std::shared_lock<std::shared_mutex> lock(node_data_mutex_); // Use shared_lock for data reads
     RCLCPP_INFO(this->get_logger(), "orbit_handle_goal");
     if (((mav_type_ == 2) && !(aircraft_fsm_state_ == ArdupilotInterfaceState::MC_HOVER || aircraft_fsm_state_ == ArdupilotInterfaceState::MC_ORBIT)) || ((mav_type_ == 1) && aircraft_fsm_state_ != ArdupilotInterfaceState::FW_CRUISE)) {
-        RCLCPP_ERROR(this->get_logger(), "Landing rejected, ArdupilotInterface is not in hover/orbit/cruise state");
+        RCLCPP_ERROR(this->get_logger(), "Orbit rejected, ArdupilotInterface is not in hover/orbit/cruise state");
         return rclcpp_action::GoalResponse::REJECT;
     }
     if (active_srv_or_act_flag_.exchange(true)) {
@@ -793,12 +803,11 @@ void ArdupilotInterface::orbit_handle_accepted(const std::shared_ptr<rclcpp_acti
         // Snapshot variables overwritten by locked read below
         ArdupilotInterfaceState current_fsm_state = ArdupilotInterfaceState::STARTED;
         int mav_type = 0;
-        double lat = NAN, lon = NAN, home_lat = NAN, home_lon = NAN;
+        double home_lat = NAN, home_lon = NAN;
         {
             std::shared_lock<std::shared_mutex> lock(node_data_mutex_); // Use shared_lock for data reads
             current_fsm_state = aircraft_fsm_state_;
             mav_type = mav_type_;
-            lat = lat_; lon = lon_;
             home_lat = home_lat_; home_lon = home_lon_;
         }
         uint64_t current_time_us = this->get_clock()->now().nanoseconds() / 1000;  // Convert to microseconds
@@ -806,6 +815,18 @@ void ArdupilotInterface::orbit_handle_accepted(const std::shared_ptr<rclcpp_acti
         if (mav_type == 2) { // Multicopter
             if (((current_fsm_state == ArdupilotInterfaceState::MC_HOVER) || (current_fsm_state == ArdupilotInterfaceState::MC_ORBIT))
                     && (current_time_us > (time_of_last_srv_req_us_ + sec_to_us(ACTION_REQ_DELAY_SEC)))) {
+                RCLCPP_WARN(this->get_logger(), "For multicopters only, the Orbit action handle overwrites autopilot parameter CIRCLE_RATE thus having consequences across autopilot reboots");
+                auto set_param_request = std::make_shared<ParamSetV2::Request>(); // Set the circle angular rate so the tangential speed matches MC_ORBIT_SPEED_MS (v = omega * r)
+                set_param_request->param_id = "CIRCLE_RATE";
+                set_param_request->value.type = 3; // Double
+                set_param_request->value.double_value = std::clamp(
+                    (MC_ORBIT_SPEED_MS / std::max(1.0, std::abs(desired_r))) * (180.0 / M_PI), // CIRCLE_RATE is in deg/s; its sign is overridden by the direction encoded in the LOITER_TURNS radius below
+                    1.0, 90.0); // Clamp to the parameter's valid range
+                time_of_last_srv_req_us_ = current_time_us;
+                call_service_and_update_fsm<ParamSetV2, autopilot_interface_msgs::action::Orbit>(
+                    set_param_client_, set_param_request, goal_handle,
+                    "Request param set", ArdupilotInterfaceState::MC_ORBIT_RATE_PARAM_SET);
+            } else if ((current_fsm_state == ArdupilotInterfaceState::MC_ORBIT_RATE_PARAM_SET) && (current_time_us > (time_of_last_srv_req_us_ + sec_to_us(ACTION_REQ_DELAY_SEC)))) {
                 auto mission_request = std::make_shared<WaypointPush::Request>();
                 mavros_msgs::msg::Waypoint wp1; // Create the first waypoint (dummy)
                 wp1.frame = 3;
@@ -817,7 +838,7 @@ void ArdupilotInterface::orbit_handle_accepted(const std::shared_ptr<rclcpp_acti
                 wp1.z_alt = 0.0;
                 mission_request->waypoints.push_back(wp1);
                 auto [center_lat, center_lon] = lat_lon_from_cartesian(home_lat, home_lon, desired_east, desired_north);
-                mavros_msgs::msg::Waypoint wp_roi; // Waypoint to lock nose to center
+                mavros_msgs::msg::Waypoint wp_roi; // Waypoint to lock nose to center, including during the transit to the circle's edge
                 wp_roi.frame = 3;
                 wp_roi.command = 195; // MAV_CMD_DO_SET_ROI_LOCATION
                 wp_roi.is_current = false;
@@ -826,29 +847,23 @@ void ArdupilotInterface::orbit_handle_accepted(const std::shared_ptr<rclcpp_acti
                 wp_roi.y_long = center_lon; // Param 6
                 wp_roi.z_alt = 0.0;
                 mission_request->waypoints.push_back(wp_roi);
-                int num_points = std::max(ORBIT_MIN_POINTS, static_cast<int>((2 * M_PI * desired_r) / ORBIT_POINT_SPACING));
-                double angle_increment = 360.0 / num_points;
-                double dist_to_center = NAN, azimuth_to_center = NAN, azimuth_from_center = NAN;
-                geod.Inverse(center_lat, center_lon, lat, lon, dist_to_center, azimuth_from_center, azimuth_to_center);
-                for (int i = 0; i < num_points; i++) {
-                    double wp_lat = NAN, wp_lon = NAN, dummy_azi = NAN;
-                    geod.Direct(center_lat, center_lon, azimuth_from_center + (i * angle_increment), desired_r, wp_lat, wp_lon, dummy_azi);
-                    mavros_msgs::msg::Waypoint wp_orbit;
-                    wp_orbit.frame = 3;
-                    wp_orbit.command = 82; // SPLINE_WAYPOINT (82) for smooth curves, or NAV_WAYPOINT (16) for straight lines
-                    wp_orbit.is_current = false;
-                    wp_orbit.autocontinue = true;
-                    wp_orbit.x_lat = wp_lat;
-                    wp_orbit.y_long = wp_lon;
-                    wp_orbit.z_alt = desired_alt;
-                    mission_request->waypoints.push_back(wp_orbit);
-                }
-                mavros_msgs::msg::Waypoint wp_jump; // Jump waypoiny (to loop forever)
+                mavros_msgs::msg::Waypoint wp_circle;
+                wp_circle.frame = 3;
+                wp_circle.command = 18; // MAV_CMD_NAV_LOITER_TURNS
+                wp_circle.is_current = false;
+                wp_circle.autocontinue = true;
+                wp_circle.param1 = 255.0; // Number of turns, capped at 255; the DO_JUMP below re-enters this item to orbit until preempted
+                wp_circle.param3 = static_cast<float>(desired_r); // Radius in m (positive: CW, negative: CCW)
+                wp_circle.x_lat = center_lat;
+                wp_circle.y_long = center_lon;
+                wp_circle.z_alt = desired_alt;
+                mission_request->waypoints.push_back(wp_circle);
+                mavros_msgs::msg::Waypoint wp_jump; // Jump waypoint (to loop forever)
                 wp_jump.frame = 2; // MAV_FRAME_MISSION
                 wp_jump.command = 177; // MAV_CMD_DO_JUMP
                 wp_jump.is_current = false;
                 wp_jump.autocontinue = true;
-                wp_jump.param1 = 2.0; // Sequence number to jump to (2 is the first orbit WP, skipping dummy (0) and ROI (1))
+                wp_jump.param1 = 2.0; // Sequence number to jump to (2 is the LOITER_TURNS item, skipping dummy (0) and ROI (1))
                 wp_jump.param2 = -1.0; // Repeat count (-1 = infinite)
                 mission_request->waypoints.push_back(wp_jump);
                 time_of_last_srv_req_us_ = current_time_us;
@@ -1213,6 +1228,7 @@ std::string ArdupilotInterface::fsm_state_to_string(ArdupilotInterfaceState stat
         case ArdupilotInterfaceState::VTOL_TAKEOFF_AUTO_MODE: return "VTOL_TAKEOFF_AUTO_MODE";
         case ArdupilotInterfaceState::FW_CRUISE: return "FW_CRUISE";
         case ArdupilotInterfaceState::MC_ORBIT: return "MC_ORBIT";
+        case ArdupilotInterfaceState::MC_ORBIT_RATE_PARAM_SET: return "MC_ORBIT_RATE_PARAM_SET";
         case ArdupilotInterfaceState::MC_ORBIT_MISSION_UPLOADED: return "MC_ORBIT_MISSION_UPLOADED";
         case ArdupilotInterfaceState::MC_ORBIT_MISSION_WP_SET: return "MC_ORBIT_MISSION_WP_SET";
         case ArdupilotInterfaceState::MC_ORBIT_AUTO_MODE: return "MC_ORBIT_AUTO_MODE";

@@ -75,6 +75,7 @@ enum class ArdupilotInterfaceState {
     VTOL_TAKEOFF_AUTO_MODE,
     FW_CRUISE,
     MC_ORBIT,
+    MC_ORBIT_RATE_PARAM_SET,
     MC_ORBIT_MISSION_UPLOADED,
     MC_ORBIT_MISSION_WP_SET,
     MC_ORBIT_AUTO_MODE,
@@ -104,7 +105,7 @@ public:
 
 private:
     // Parameters - Reposition service
-    int REPOSITION_REQ_DELAY_MS, REPOSITION_PUB_RETRIES;
+    int REPOSITION_REQ_DELAY_MS, REPOSITION_PUB_RETRIES, REPOSITION_MODE_RETRIES;
     // Parameters - Action Handle Accepted (Landing, Offboard, Orbit, Takeoff)
     int ACTION_LOOP_RATE_HZ;
     double ACTION_REQ_DELAY_SEC;
@@ -112,8 +113,7 @@ private:
     double MC_LAND_INIT_DIST_THRESH, VTOL_LAND_LOITER_DIST, VTOL_LAND_LOITER_RADIUS, VTOL_LAND_LOITER_ALT;
     double VTOL_LAND_LOITER_EXIT_DIST_THRESH, VTOL_LAND_LOITER_EXIT_ALT_THRESH, VTOL_LAND_LOITER_EXIT_HEADING_THRESH, LAND_COMPLETED_ALT_THRESH;
     // Parameters - Orbit
-    int ORBIT_MIN_POINTS;
-    double ORBIT_POINT_SPACING;
+    double MC_ORBIT_SPEED_MS;
     // Parameters - Takeoff
     double MC_TAKEOFF_COMPLETED_RATIO, VTOL_TAKEOFF_ALT_THRESH, VTOL_TAKEOFF_TRANSITION_WAIT_SEC, VTOL_TAKEOFF_LOITER_RADIUS;
 
@@ -251,6 +251,9 @@ private:
         goal_handle->publish_feedback(feedback);
         client->async_send_request(request,
             [this, feedback, goal_handle, next_state, feedback_str](typename rclcpp::Client<ServiceT>::SharedFuture future) {
+                if (!goal_handle->is_active() || goal_handle->is_canceling()) {
+                    return;
+                }
                 bool success = false;
                 if constexpr (std::is_same_v<ServiceT, mavros_msgs::srv::SetMode>) {
                     success = future.get()->mode_sent; // The success field is named differently in the SetMode service
