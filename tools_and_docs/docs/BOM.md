@@ -105,15 +105,13 @@ flowchart TB
 
 ## Holybro X650 with 6X Autopilot Parameters
 
-Non-default parameters for the Holybro X650 kit; for full `.params` files examples, check folder [`params/`](/tools_and_docs/docs/params/)
+Select parameters for the Holybro X650 kit; for full `.params` files examples, check folder [`params/`](/tools_and_docs/docs/params/)
 
-<!--
 ### PX4 Configuration
 
 ```sh
 TBD
 ```
--->
 
 ### ArduPilot Configuration
 
@@ -140,8 +138,8 @@ MOT_SPIN_ARM        0.05            # Lower spin speed when armed
 # (optional) lower MOT_SPIN_MIN from the 0.15 defaults to 0.1
 
 # Limit RPY acceleration (in centidegrees per square second)
-ATC_ACCEL_P_MAX     52000           # Between slow and very slow
-ATC_ACCEL_R_MAX     52000           # Between slow and very slow
+ATC_ACCEL_P_MAX     30000           # Very slow
+ATC_ACCEL_R_MAX     30000           # Very slow
 ATC_ACCEL_Y_MAX     18000           # Slow
 
 # 6S battery (Tattu G-Tech 6S 8000mAh 25C 22.2V)
@@ -186,8 +184,8 @@ COMPASS_ORIENT      6               # Yaw270, assuming the IST8310/6589xx is rec
 
 # Failsafes
 CIRCLE_OPTIONS      0               # Disable using the pitch/roll stick control circle mode's radius and rate
-GUID_TIMEOUT        3.0             # Guided mode timeout after which vehicle will stop or return to level if no updates are received
-GUID_OPTIONS        0               # If the 3rd bit is not set, interprets att_msg.thrust as a [0,1] climb-rate target
+GUID_TIMEOUT        3.0             # (default) Guided mode timeout after which vehicle will stop or return to level if no updates are received
+GUID_OPTIONS        0               # (default) If the 3rd bit is not set, interprets att_msg.thrust as a [0,1] climb-rate target
 FS_THR_ENABLE       1               # Commands an RTL if the RC link is lost, requires configuring "Failsafe No pulses" on the Boxer RC using protocol FrSky X D16 with the R86C receiver
 FS_GCS_ENABLE       1               # Commands an RTL if the QGC link is lost
 FS_GCS_TIMEOUT      5               # The timeout before the GCS failsafe engages
@@ -205,4 +203,20 @@ RSSI_CHANNEL        16              # Tells the flight controller to read Channe
 # In QGC -> Vehicle Configuration -> Flight Modes, set one switch for Loiter/AltHold/Stabilized, one for RTL
 # In QGC -> Vehicle Configuration -> Flight Safety, set RTL settings
 # In QGC -> Vehicle Configuration -> Sensors, calibrate accelerometer, level horizon, and compass (outdoors)
+```
+
+## Triple Redundancy for RTL
+
+This configuration allows to trigger an emergency RTL through 3 independent channels:
+
+1. Flight mode change using a switch on the RC (Boxer-R86C link)
+2. Flight mode change from QGC user interface (telemetry radio link)
+3. Flight mode change using a one-liner in the `aircraft_container_N` tmux (Doodle Labs link)
+
+```sh
+# PX4
+ros2 topic pub /Drone${DRONE_ID}/fmu/in/vehicle_command px4_msgs/msg/VehicleCommand "{command: 20, target_system: ${DRONE_ID}, target_component: 1, source_system: 255, source_component: 0, from_external: true}"
+
+# ArduPilot
+case "$DRONE_TYPE" in vtol|tail) MODE=QRTL;; *) MODE=RTL;; esac; ros2 service call /mavros/set_mode mavros_msgs/srv/SetMode "{base_mode: 0, custom_mode: '$MODE'}"
 ```
